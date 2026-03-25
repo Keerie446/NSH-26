@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSH 2026 ACM — Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ffffff;
+            --secondary: #f5f5f5;
+            --border: #e0e0e0;
+            --text-dark: #1a1a1a;
+            --text-light: #666666;
+            --accent: #1976d2;
+        }
+        body {
+            background-color: var(--primary);
+            color: var(--text-dark);
+        }
+        .sidebar {
+            background-color: var(--secondary);
+            border-right: 1px solid var(--border);
+            min-height: 100vh;
+            padding: 2rem 0;
+        }
+        .nav-link {
+            color: var(--text-dark);
+            padding: 1rem 1.5rem;
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        .nav-link.active {
+            background-color: var(--border);
+            border-left-color: var(--accent);
+            color: var(--accent);
+            font-weight: 600;
+        }
+        .card {
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .btn-primary {
+            background-color: var(--accent);
+            border-color: var(--accent);
+        }
+        .btn-primary:hover {
+            background-color: #1565c0;
+        }
+        .table {
+            border: 1px solid var(--border);
+        }
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .status-success { background-color: #c8e6c9; color: #2e7d32; }
+        .status-warning { background-color: #ffe0b2; color: #e65100; }
+        .status-danger { background-color: #ffcdd2; color: #c62828; }
+        .form-section {
+            background-color: var(--secondary);
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .modal-content {
+            border: 1px solid var(--border);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 sidebar">
+                <h5 class="ps-3 mb-4">ACM Admin</h5>
+                <nav class="nav flex-column">
+                    <a class="nav-link active" href="#" onclick="showTab('dashboard')">Dashboard</a>
+                    <a class="nav-link" href="#" onclick="showTab('objects')">Objects</a>
+                    <a class="nav-link" href="#" onclick="showTab('datasets')">Datasets</a>
+                    <a class="nav-link" href="#" onclick="showTab('addObject')">Add Object</a>
+                    <a class="nav-link" href="#" onclick="showTab('createDataset')">Create Dataset</a>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 p-4">
+                <!-- Dashboard Tab -->
+                <div id="dashboard" class="tab-content">
+                    <h2 class="mb-4">System Status</h2>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="card p-3">
+                                <h6 class="text-muted">Total Objects</h6>
+                                <h3 id="totalObjects">0</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-3">
+                                <h6 class="text-muted">Active CDMs</h6>
+                                <h3 id="activeCDMs">0</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-3">
+                                <h6 class="text-muted">Datasets</h6>
+                                <h3 id="datasetCount">0</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-3">
+                                <h6 class="text-muted">Server Status</h6>
+                                <span class="status-badge status-success">Online</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Objects Tab -->
+                <div id="objects" class="tab-content" style="display:none;">
+                    <h2 class="mb-4">Space Objects</h2>
+                    <button class="btn btn-primary mb-3" onclick="refreshObjects()">Refresh</button>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Type</th>
+                                    <th>Fuel (kg)</th>
+                                    <th>Status</th>
+                                    <th>Velocity (km/s)</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="objectsTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Datasets Tab -->
+                <div id="datasets" class="tab-content" style="display:none;">
+                    <h2 class="mb-4">Available Datasets</h2>
+                    <button class="btn btn-primary mb-3" onclick="refreshDatasets()">Refresh</button>
+                    <div id="datasetsList"></div>
+                </div>
+
+                <!-- Add Object Tab -->
+                <div id="addObject" class="tab-content" style="display:none;">
+                    <h2 class="mb-4">Add Space Object</h2>
+                    <div class="form-section">
+                        <form id="addObjectForm">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label>Object ID</label>
+                                    <input type="text" class="form-control" id="objId" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label>Type</label>
+                                    <select class="form-control" id="objType" required>
+                                        <option value="SATELLITE">Satellite</option>
+                                        <option value="DEBRIS">Debris</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label>Position X (km)</label>
+                                    <input type="number" class="form-control" id="rx" step="0.1" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Position Y (km)</label>
+                                    <input type="number" class="form-control" id="ry" step="0.1" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Position Z (km)</label>
+                                    <input type="number" class="form-control" id="rz" step="0.1" required>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label>Velocity X (km/s)</label>
+                                    <input type="number" class="form-control" id="vx" step="0.01" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Velocity Y (km/s)</label>
+                                    <input type="number" class="form-control" id="vy" step="0.01" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Velocity Z (km/s)</label>
+                                    <input type="number" class="form-control" id="vz" step="0.01" required>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label>Fuel (kg)</label>
+                                    <input type="number" class="form-control" id="fuel" step="0.1">
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-success">Add Object</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Create Dataset Tab -->
+                <div id="createDataset" class="tab-content" style="display:none;">
+                    <h2 class="mb-4">Create Dataset</h2>
+                    <div class="form-section">
+                        <form id="createDatasetForm">
+                            <div class="mb-3">
+                                <label>Dataset Name</label>
+                                <input type="text" class="form-control" id="datasetName" required>
+                            </div>
+                            <div class="mb-3">
+                                <label>Description</label>
+                                <textarea class="form-control" id="datasetDesc" rows="3"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-success">Save Dataset</button>
+                            <button type="button" class="btn btn-info ms-2" onclick="exportCurrentData()">Export Data</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.getElementById(tabName).style.display = 'block';
+            
+            // Update nav links
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Load data for specific tabs
+            if (tabName === 'objects') refreshObjects();
+            if (tabName === 'datasets') refreshDatasets();
+            if (tabName === 'dashboard') loadDashboard();
+        }
+
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/api/visualization/snapshot');
+                const data = await response.json();
+                document.getElementById('totalObjects').textContent = data.satellites.length + data.debris_cloud.length;
+            } catch (e) {
+                console.error('Error loading dashboard:', e);
+            }
+        }
+
+        async function refreshObjects() {
+            try {
+                const response = await fetch('/api/visualization/snapshot');
+                const data = await response.json();
+                const tbody = document.getElementById('objectsTable');
+                tbody.innerHTML = '';
+
+                data.satellites.forEach(sat => {
+                    const vel = Math.sqrt(sat.vx**2 + sat.vy**2 + sat.vz**2);
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${sat.id}</td>
+                            <td>🛰️ Satellite</td>
+                            <td>${sat.fuel_kg.toFixed(1)}</td>
+                            <td><span class="status-badge status-success">${sat.status}</span></td>
+                            <td>${vel.toFixed(2)}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="deleteObject('${sat.id}')">Delete</button></td>
+                        </tr>
+                    `;
+                });
+            } catch (e) {
+                console.error('Error loading objects:', e);
+            }
+        }
+
+        async function refreshDatasets() {
+            try {
+                const response = await fetch('/api/datasets');
+                const datasets = await response.json();
+                const container = document.getElementById('datasetsList');
+                container.innerHTML = '';
+
+                datasets.forEach(ds => {
+                    container.innerHTML += `
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">${ds.name}</h5>
+                                <p class="card-text text-muted">${ds.description}</p>
+                                <small class="text-muted">Created: ${new Date(ds.created_at).toLocaleString()}</small>
+                                <br>
+                                <button class="btn btn-sm btn-primary mt-2" onclick="loadDataset(${ds.id})">Load Dataset</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteDataset(${ds.id})">Delete</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (e) {
+                console.error('Error loading datasets:', e);
+            }
+        }
+
+        document.getElementById('addObjectForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                timestamp: new Date().toISOString(),
+                objects: [{
+                    id: document.getElementById('objId').value,
+                    type: document.getElementById('objType').value,
+                    r: {
+                        x: parseFloat(document.getElementById('rx').value),
+                        y: parseFloat(document.getElementById('ry').value),
+                        z: parseFloat(document.getElementById('rz').value)
+                    },
+                    v: {
+                        x: parseFloat(document.getElementById('vx').value),
+                        y: parseFloat(document.getElementById('vy').value),
+                        z: parseFloat(document.getElementById('vz').value)
+                    }
+                }]
+            };
+
+            try {
+                const response = await fetch('/api/telemetry', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                alert(`✅ Added! (${result.processed_count} objects processed)`);
+                document.getElementById('addObjectForm').reset();
+                refreshObjects();
+            } catch (e) {
+                alert('❌ Error: ' + e.message);
+            }
+        });
+
+        document.getElementById('createDatasetForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('datasetName').value;
+            const desc = document.getElementById('datasetDesc').value;
+
+            try {
+                const response = await fetch('/api/visualization/snapshot');
+                const currentData = await response.json();
+
+                const saveResponse = await fetch('/api/datasets', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        name,
+                        description: desc,
+                        data: currentData
+                    })
+                });
+                alert('✅ Dataset saved!');
+                document.getElementById('createDatasetForm').reset();
+            } catch (e) {
+                alert('❌ Error: ' + e.message);
+            }
+        });
+
+        async function deleteObject(objId) {
+            if (confirm(`Delete ${objId}?`)) {
+                // Implement delete endpoint
+                alert('Delete functionality coming soon');
+            }
+        }
+
+        async function loadDataset(datasetId) {
+            try {
+                const response = await fetch(`/api/datasets/${datasetId}`);
+                const dataset = await response.json();
+                alert(`✅ Loaded dataset: ${dataset.name}`);
+                // Reload dashboard with new data
+                window.location.reload();
+            } catch (e) {
+                alert('❌ Error: ' + e.message);
+            }
+        }
+
+        function exportCurrentData() {
+            fetch('/api/visualization/snapshot')
+                .then(r => r.json())
+                .then(data => {
+                    const dataStr = JSON.stringify(data, null, 2);
+                    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                    const url = URL.createObjectURL(dataBlob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `acm-export-${Date.now()}.json`;
+                    link.click();
+                });
+        }
+
+        // Load dashboard on page load
+        loadDashboard();
+    </script>
+</body>
+</html>

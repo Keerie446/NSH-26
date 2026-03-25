@@ -1,0 +1,112 @@
+{
+  "datasets": [
+    {
+      "name": "ISS_LEO_Scenario",
+      "description": "International Space Station in Low Earth Orbit with nearby debris",
+      "data": {
+        "timestamp": "2026-03-24T14:25:00Z",
+        "satellites": [
+          {
+            "id": "ISS-001",
+            "type": "SATELLITE",
+            "lat": 51.6416,
+            "lon": -74.8860,
+            "altitude_km": 408,
+            "vx": 0.5,
+            "vy": 7.66,
+            "vz": 0.2,
+            "fuel_kg": 500.0,
+            "status": "NOMINAL"
+          }
+        ],
+        "debris_cloud": [
+          {
+            "id": "DEB-LEO-001",
+            "lat": 51.5,
+            "lon": -74.5,
+            "altitude_km": 410,
+            "vx": 0.6,
+            "vy": 7.64,
+            "vz": 0.15
+          }
+        ]
+      }
+    },
+    {
+      "name": "GEO_Constellation",
+      "description": "Geostationary satellite constellation with high collision risk",
+      "data": {
+        "timestamp": "2026-03-24T14:25:00Z",
+        "satellites": [
+          {
+            "id": "GEOSAT-01",
+            "type": "SATELLITE",
+            "lat": 0.0,
+            "lon": 0.0,
+            "altitude_km": 35786,
+            "vx": 0.0,
+            "vy": 3.07,
+            "vz": 0.0,
+            "fuel_kg": 1000.0,
+            "status": "NOMINAL"
+          },
+          {
+            "id": "GEOSAT-02",
+            "type": "SATELLITE",
+            "lat": 0.0,
+            "lon": 0.5,
+            "altitude_km": 35786,
+            "vx": 0.05,
+            "vy": 3.08,
+            "vz": 0.05,
+            "fuel_kg": 1000.0,
+            "status": "NOMINAL"
+          }
+        ],
+        "debris_cloud": [
+          {
+            "id": "DEB-GEO-001",
+            "lat": 0.1,
+            "lon": 0.3,
+            "altitude_km": 35790,
+            "vx": 0.1,
+            "vy": 3.09,
+            "vz": 0.1
+          }
+        ]
+      }
+    },
+    {
+      "name": "Emergency_Scenario",
+      "description": "High-risk collision scenario with immediate evasion needed",
+      "data": {
+        "timestamp": "2026-03-24T14:25:00Z",
+        "satellites": [
+          {
+            "id": "CRITICAL-SAT",
+            "type": "SATELLITE",
+            "lat": 30.0,
+            "lon": 15.0,
+            "altitude_km": 600,
+            "vx": 1.0,
+            "vy": 7.5,
+            "vz": 0.5,
+            "fuel_kg": 150.0,
+            "status": "NOMINAL"
+          }
+        ],
+        "debris_cloud": [
+          {
+            "id": "DEB-THREAT-001",
+            "lat": 30.05,
+            "lon": 15.05,
+            "altitude_km": 601,
+            "vx": 1.1,
+            "vy": 7.45,
+            "vz": 0.6
+          }
+        ]
+      }
+    }
+  ]
+}

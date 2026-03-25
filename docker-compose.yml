@@ -1,0 +1,25 @@
+version: "3.9"
+services:
+  acm:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://acm:acm@postgres:5432/acmdb
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis:    {condition: service_started}
+    volumes: ["./app:/app/app"]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+  postgres:
+    image: postgres:15
+    environment: {POSTGRES_USER: acm, POSTGRES_PASSWORD: acm, POSTGRES_DB: acmdb}
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U acm"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]

@@ -1,0 +1,16 @@
+2026-03-24 14:38:31,195 | INFO | acm | Static files directory: /Users/keerthana/Projects/NSH'26
+2026-03-24 14:38:31,195 | INFO | acm | ✓ Dashboard (index.html) mounted successfully
+INFO:     Started server process [30617]
+INFO:     Waiting for application startup.
+2026-03-24 14:38:31,195 | INFO | acm | ACM starting up...
+2026-03-24 14:38:31,196 | INFO | acm.state | ACM state initialised. Clock: 2026-03-24T09:08:31.195656+00:00
+2026-03-24 14:38:31,222 | INFO | acm.ml | Created and trained default XGBoost model
+2026-03-24 14:38:31,222 | INFO | acm.ml | ✓ Collision probability (XGBoost) model initialized
+2026-03-24 14:38:31,224 | INFO | acm.ml | ✓ Trajectory correction (LSTM) model initialized
+2026-03-24 14:38:31,224 | INFO | acm | ACM ready on port 8000.
+INFO:     Application startup complete.
+ERROR:    [Errno 48] error while attempting to bind on address ('127.0.0.1', 8000): address already in use
+INFO:     Waiting for application shutdown.
+2026-03-24 14:38:31,229 | INFO | acm.state | ACM shutdown. Objects tracked: 0
+INFO:     Application shutdown complete.
+✓ Database initialized at /Users/keerthana/Projects/NSH'26/acm.db

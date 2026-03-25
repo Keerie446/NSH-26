@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSH 2026 — Autonomous Constellation Manager (ACM) Dashboard</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Chart.js for heatmap -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-dark: #ffffff;
+            --secondary-dark: #f5f5f5;
+            --border-color: #e0e0e0;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --accent-danger: #d32f2f;
+            --accent-warning: #f57c00;
+            --accent-success: #388e3c;
+            --accent-info: #1976d2;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: var(--primary-dark);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+            border-bottom: 2px solid var(--border-color);
+            padding: 1.5rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: var(--accent-info);
+        }
+        
+        header .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--accent-success);
+            margin-right: 0.5rem;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .status-text {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        
+        .panel {
+            background-color: var(--secondary-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            min-height: 400px;
+            position: relative;
+            transition: border-color 0.3s ease;
+        }
+        
+        .panel:hover {
+            border-color: var(--accent-info);
+        }
+        
+        .panel-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--accent-info);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .panel-title::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 1.3rem;
+            background-color: var(--accent-info);
+            border-radius: 2px;
+        }
+        
+        /* Panel 1: Earth Map */
+        #earth-map {
+            width: 100%;
+            height: 350px;
+            background: radial-gradient(circle, #1a3a4d 0%, #0d1117 100%);
+            border-radius: 6px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        canvas#map-canvas {
+            display: block;
+            margin: auto;
+        }
+        
+        .map-legend {
+            font-size: 0.85rem;
+            margin-top: 1rem;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        
+        .legend-satellite { background-color: var(--accent-info); }
+        .legend-debris { background-color: var(--accent-danger); }
+        .legend-orbit { background-color: var(--accent-warning); }
+        
+        /* Panel 2: Bullseye Chart */
+        #bullseye-chart {
+            width: 100%;
+            height: 350px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle, rgba(88, 166, 255, 0.05) 0%, transparent 70%);
+            border-radius: 6px;
+        }
+        
+        svg.bullseye {
+            width: 100%;
+            height: 100%;
+            max-width: 350px;
+            max-height: 350px;
+        }
+        
+        .bullseye-circle {
+            fill: none;
+            stroke: var(--border-color);
+            stroke-width: 1px;
+        }
+        
+        .collision-point {
+            fill: var(--accent-danger);
+            opacity: 0.8;
+        }
+        
+        .collision-radius {
+            fill: none;
+            stroke: var(--accent-danger);
+            stroke-width: 2;
+            opacity: 0.3;
+        }
+        
+        /* Panel 3: Fuel Heatmap */
+        #fuel-heatmap {
+            overflow-y: auto;
+            max-height: 350px;
+        }
+        
+        .fuel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 1rem;
+        }
+        
+        .fuel-card {
+            padding: 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .fuel-card:hover {
+            border-color: var(--accent-info);
+            transform: scale(1.05);
+        }
+        
+        .fuel-sat-id {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+        
+        .fuel-percentage {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+        }
+        
+        .fuel-bar {
+            width: 100%;
+            height: 8px;
+            background-color: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 0.5rem 0;
+        }
+        
+        .fuel-bar-fill {
+            height: 100%;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+        
+        .fuel-critical { background-color: var(--accent-danger); }
+        .fuel-warning { background-color: var(--accent-warning); }
+        .fuel-good { background-color: var(--accent-success); }
+        
+        .fuel-status {
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            color: var(--text-secondary);
+        }
+        
+        /* Panel 4: Maneuver Timeline */
+        #maneuver-timeline {
+            overflow-x: auto;
+            max-height: 350px;
+        }
+        
+        .timeline-container {
+            position: relative;
+            min-height: 300px;
+            padding: 2rem 1rem;
+        }
+        
+        .timeline-axis {
+            position: absolute;
+            left: 100px;
+            right: 20px;
+            top: 50%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+            transform: translateY(-50%);
+        }
+        
+        .timeline-marker {
+            position: absolute;
+            left: 100px;
+            width: 2px;
+            height: 20px;
+            background-color: var(--border-color);
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .timeline-marker.tca {
+            background-color: var(--accent-danger);
+            height: 30px;
+            width: 3px;
+        }
+        
+        .timeline-event {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 120px;
+        }
+        
+        .timeline-event.burn1 {
+            color: var(--accent-warning);
+        }
+        
+        .timeline-event.burn2 {
+            color: var(--accent-success);
+        }
+        
+        .timeline-event.tca {
+            color: var(--accent-danger);
+        }
+        
+        .event-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            margin-bottom: 0.5rem;
+        }
+        
+        .event-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .event-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+        
+        .no-data {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .panel {
+                min-height: 350px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            header {
+                margin-bottom: 1rem;
+                padding: 1rem 0;
+            }
+            
+            header h1 {
+                font-size: 1.2rem;
+            }
+            
+            .panel {
+                padding: 1rem;
+                min-height: 300px;
+            }
+            
+            .fuel-grid {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+                gap: 0.5rem;
+            }
+        }
+        
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-info);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .update-time {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container-lg">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <h1>
+                        <span class="status-indicator"></span>
+                        NSH 2026 — ACM Dashboard
+                    </h1>
+                    <div class="status-text">
+                        Autonomous Constellation Manager | Real-time Collision Avoidance
+                    </div>
+                </div>
+                <div class="col-auto ms-auto">
+                    <div id="connection-status" style="font-size: 0.9rem; color: var(--accent-success);">
+                        <span class="spinner" style="margin-right: 0.5rem;"></span>
+                        Connecting...
+                    </div>
+                    <div id="last-update" class="update-time">Last update: --:--:--</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="container-lg">
+            <!-- Row 1: Earth Map + Bullseye -->
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="panel">
+                        <div class="panel-title">2D Earth Map</div>
+                        <div id="earth-map">
+                            <canvas id="map-canvas" width="400" height="350"></canvas>
+                        </div>
+                        <div class="map-legend">
+                            <div class="legend-item">
+                                <div class="legend-dot legend-satellite"></div>
+                                <span>Satellites</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot legend-debris"></div>
+                                <span>Debris</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot legend-orbit"></div>
+                                <span>Predicted Orbit</span>
+                            </div>
+                            <div class="legend-item">
+                                <div style="width: 8px; height: 8px; border: 1px solid var(--text-secondary);"></div>
+                                <span>Earth</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="panel">
+                        <div class="panel-title">Collision Risk (Bullseye)</div>
+                        <div id="bullseye-chart">
+                            <svg class="bullseye" id="bullseye-svg"></svg>
+                        </div>
+                        <div style="font-size: 0.9rem; margin-top: 1rem;">
+                            <div id="bullseye-info" style="color: var(--text-secondary);">No collisions detected</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Fuel Heatmap + Maneuver Timeline -->
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="panel">
+                        <div class="panel-title">Fuel Level Heatmap</div>
+                        <div id="fuel-heatmap">
+                            <div class="fuel-grid" id="fuel-grid">
+                                <div class="no-data">No satellite data available</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="panel">
+                        <div class="panel-title">Maneuver Timeline</div>
+                        <div id="maneuver-timeline">
+                            <div class="timeline-container">
+                                <div class="timeline-axis"></div>
+                                <div id="timeline-events"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_URL = 'http://localhost:8000/api';
+        let lastUpdateTime = null;
+        let updateInterval = null;
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            startDashboard();
+        });
+
+        function startDashboard() {
+            console.log('Starting dashboard...');
+            updateDashboard();
+            // Update every 1 second
+            updateInterval = setInterval(updateDashboard, 1000);
+        }
+
+        async function updateDashboard() {
+            try {
+                // Fetch data from multiple endpoints
+                const [snapshot, cdmLog, maneuverPlan] = await Promise.all([
+                    fetch(`${API_URL}/visualization/snapshot`).then(r => r.json()).catch(() => null),
+                    fetch(`${API_URL}/cdm/bullseye`).then(r => r.json()).catch(() => null),
+                    fetch(`${API_URL}/visualization/maneuver-gantt`).then(r => r.json()).catch(() => null)
+                ]);
+
+                if (!snapshot) {
+                    setConnectionStatus('Waiting for telemetry...', false);
+                    clearDashboard();
+                    return;
+                }
+
+                setConnectionStatus('Connected', true);
+                updateLastTime(snapshot.timestamp);
+
+                // Update all panels
+                updateEarthMap(snapshot);
+                updateBullseyeChart(cdmLog);
+                updateFuelHeatmap(snapshot);
+                updateManeuverTimeline(maneuverPlan);
+
+            } catch (error) {
+                console.error('Dashboard update error:', error);
+                setConnectionStatus('Connection error', false);
+            }
+        }
+
+        function setConnectionStatus(status, connected) {
+            const el = document.getElementById('connection-status');
+            if (connected) {
+                el.innerHTML = `<span style="color: var(--accent-success);">● Connected</span>`;
+            } else {
+                el.innerHTML = `<span style="color: var(--accent-warning);">⚠ ${status}</span>`;
+            }
+        }
+
+        function updateLastTime(timestamp) {
+            if (!timestamp) return;
+            const date = new Date(timestamp);
+            const time = date.toLocaleTimeString();
+            document.getElementById('last-update').textContent = `Last update: ${time}`;
+            lastUpdateTime = timestamp;
+        }
+
+        // ─── Panel 1: Earth Map ───────────────────────────────────────────────
+        function updateEarthMap(snapshot) {
+            const canvas = document.getElementById('map-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.fillStyle = 'rgba(13, 17, 23, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Earth
+            ctx.fillStyle = '#4a7c7e';
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, 80, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#8b949e';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Draw grid
+            ctx.strokeStyle = 'rgba(139, 148, 158, 0.2)';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < 4; i++) {
+                const radius = (i + 1) * 20;
+                ctx.beginPath();
+                ctx.arc(canvas.width / 2, canvas.height / 2, radius, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+
+            // Helper function to project lat/lon to canvas
+            const projectToCanvas = (lat, lon) => {
+                const x = (lon + 180) / 360 * canvas.width;
+                const y = (90 - lat) / 180 * canvas.height;
+                return { x, y };
+            };
+
+            // Draw satellites
+            if (snapshot.satellites && snapshot.satellites.length > 0) {
+                ctx.fillStyle = '#58a6ff';
+                snapshot.satellites.forEach(sat => {
+                    const pos = projectToCanvas(sat.lat, sat.lon);
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    // Draw label
+                    ctx.fillStyle = '#c9d1d9';
+                    ctx.font = '10px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(sat.id.substring(0, 3), pos.x, pos.y - 8);
+                });
+            }
+
+            // Draw debris
+            if (snapshot.debris_cloud && snapshot.debris_cloud.length > 0) {
+                ctx.fillStyle = 'rgba(248, 81, 73, 0.6)';
+                snapshot.debris_cloud.forEach(deb => {
+                    const pos = projectToCanvas(deb[1], deb[2]);
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 2, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            }
+
+            // Draw predicted orbit (simple circle)
+            if (snapshot.satellites && snapshot.satellites.length > 0) {
+                ctx.strokeStyle = 'rgba(255, 166, 87, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 5]);
+                snapshot.satellites.forEach(sat => {
+                    ctx.beginPath();
+                    ctx.arc(canvas.width / 2, canvas.height / 2, 100, 0, 2 * Math.PI);
+                    ctx.stroke();
+                });
+                ctx.setLineDash([]);
+            }
+        }
+
+        // ─── Panel 2: Bullseye Chart ──────────────────────────────────────────
+        function updateBullseyeChart(cdmLog) {
+            const svg = document.getElementById('bullseye-svg');
+            svg.innerHTML = ''; // Clear
+
+            const size = 350;
+            const center = size / 2;
+            const maxRadius = 100;
+
+            if (!cdmLog || !cdmLog.points || cdmLog.points.length === 0) {
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', center);
+                text.setAttribute('y', center);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', '#8b949e');
+                text.textContent = 'No collisions detected';
+                svg.appendChild(text);
+                return;
+            }
+
+            // Draw concentric circles (distance rings)
+            for (let i = 1; i <= 5; i++) {
+                const radius = (i / 5) * maxRadius;
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', center);
+                circle.setAttribute('cy', center);
+                circle.setAttribute('r', radius);
+                circle.setAttribute('class', 'bullseye-circle');
+                svg.appendChild(circle);
+
+                // Add distance labels
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                label.setAttribute('x', center + radius);
+                label.setAttribute('y', center - 5);
+                label.setAttribute('font-size', '10');
+                label.setAttribute('fill', '#8b949e');
+                label.textContent = `${(i * 10).toFixed(0)}km`;
+                svg.appendChild(label);
+            }
+
+            // Draw axes
+            const axisLine = (x1, y1, x2, y2) => {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', x1);
+                line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2);
+                line.setAttribute('y2', y2);
+                line.setAttribute('stroke', '#30363d');
+                line.setAttribute('stroke-width', '0.5');
+                svg.appendChild(line);
+            };
+            axisLine(center, 0, center, size); // Vertical
+            axisLine(0, center, size, center); // Horizontal
+
+            // Plot collision points
+            cdmLog.points.forEach((point, idx) => {
+                const angle = (point.approach_angle_deg * Math.PI) / 180;
+                const r = Math.min(point.miss_dist_km * 10, maxRadius); // Scale to fit
+                const x = center + r * Math.cos(angle);
+                const y = center - r * Math.sin(angle);
+
+                // Draw point
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', x);
+                circle.setAttribute('cy', y);
+                circle.setAttribute('r', 5);
+                circle.setAttribute('class', 'collision-point');
+                svg.appendChild(circle);
+
+                // Draw risk radius (100m critical)
+                const riskRadius = 1; // 100m scaled
+                const riskCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                riskCircle.setAttribute('cx', x);
+                riskCircle.setAttribute('cy', y);
+                riskCircle.setAttribute('r', riskRadius);
+                riskCircle.setAttribute('class', 'collision-radius');
+                svg.appendChild(riskCircle);
+
+                // Add label
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                label.setAttribute('x', x + 8);
+                label.setAttribute('y', y + 3);
+                label.setAttribute('font-size', '9');
+                label.setAttribute('fill', '#f85149');
+                label.textContent = `${point.satellite_id.substring(0, 3)} - ${point.tca_hours.toFixed(1)}h`;
+                svg.appendChild(label);
+            });
+
+            // Update info
+            const infoEl = document.getElementById('bullseye-info');
+            infoEl.innerHTML = `<strong>${cdmLog.points.length}</strong> collision(s) detected in next 24h`;
+        }
+
+        // ─── Panel 3: Fuel Heatmap ────────────────────────────────────────────
+        function updateFuelHeatmap(snapshot) {
+            const grid = document.getElementById('fuel-grid');
+            grid.innerHTML = '';
+
+            if (!snapshot.satellites || snapshot.satellites.length === 0) {
+                grid.innerHTML = '<div class="no-data">No satellite data</div>';
+                return;
+            }
+
+            snapshot.satellites.forEach(sat => {
+                const fuelPercent = sat.fuel_kg * 2; // Assuming 50kg initial
+                let fuelClass = 'fuel-good';
+                let statusText = 'Nominal';
+
+                if (fuelPercent <= 5) {
+                    fuelClass = 'fuel-critical';
+                    statusText = 'CRITICAL';
+                } else if (fuelPercent <= 20) {
+                    fuelClass = 'fuel-warning';
+                    statusText = 'Warning';
+                }
+
+                const card = document.createElement('div');
+                card.className = 'fuel-card';
+                card.innerHTML = `
+                    <div class="fuel-sat-id">${sat.id}</div>
+                    <div class="fuel-percentage">${fuelPercent.toFixed(0)}%</div>
+                    <div class="fuel-bar">
+                        <div class="fuel-bar-fill ${fuelClass}" style="width: ${fuelPercent}%"></div>
+                    </div>
+                    <div class="fuel-status">${statusText}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e; margin-top: 0.25rem;">
+                        ${sat.fuel_kg.toFixed(2)} kg
+                    </div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">
+                        ${sat.status}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // ─── Panel 4: Maneuver Timeline ───────────────────────────────────────
+        function updateManeuverTimeline(maneuverPlan) {
+            const container = document.getElementById('timeline-events');
+            container.innerHTML = '';
+
+            if (!maneuverPlan || !maneuverPlan.burns || maneuverPlan.burns.length === 0) {
+                const noData = document.createElement('div');
+                noData.className = 'no-data';
+                noData.style.position = 'absolute';
+                noData.style.width = '100%';
+                noData.style.height = '100%';
+                noData.textContent = 'No maneuvers scheduled';
+                container.innerHTML = '<div class="no-data" style="position: absolute; width: 100%; height: 100%;">No maneuvers scheduled</div>';
+                return;
+            }
+
+            // Calculate positions (spread events across timeline)
+            const burns = maneuverPlan.burns;
+            const width = 500;
+            const minX = 150;
+            const maxX = width - 50;
+            const spacing = (maxX - minX) / (burns.length + 1);
+
+            burns.forEach((burn, idx) => {
+                const x = minX + spacing * (idx + 1);
+                const isBurn1 = burn.type === 'evasion' && burn.burn_id.includes('SLOW');
+                const isBurn2 = burn.type === 'evasion' && burn.burn_id.includes('RECOVER');
+                const type = isBurn1 ? 'burn1' : isBurn2 ? 'burn2' : 'evasion';
+
+                const event = document.createElement('div');
+                event.className = `timeline-event ${type}`;
+                event.style.left = `${x}px`;
+
+                const startTime = new Date(burn.start);
+                const endTime = new Date(burn.end);
+                const timeStr = startTime.toLocaleTimeString();
+
+                event.innerHTML = `
+                    <div class="event-icon"></div>
+                    <div class="event-label">${isBurn1 ? 'Decel' : isBurn2 ? 'Accel' : 'Burn'}</div>
+                    <div class="event-time">${timeStr}</div>
+                `;
+                container.appendChild(event);
+            });
+        }
+
+        function clearDashboard() {
+            document.getElementById('map-canvas').getContext('2d').clearRect(0, 0, 400, 350);
+            document.getElementById('bullseye-svg').innerHTML = '';
+            document.getElementById('fuel-grid').innerHTML = '<div class="no-data">No data</div>';
+            document.getElementById('timeline-events').innerHTML = '<div class="no-data">No data</div>';
+        }
+
+        // Cleanup on unload
+        window.addEventListener('beforeunload', () => {
+            if (updateInterval) clearInterval(updateInterval);
+        });
+    </script>
+</body>
+</html>
