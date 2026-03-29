@@ -7,6 +7,7 @@ from app.schemas import SimulateStepRequest, SimulateStepResponse
 from app.core.state import ACMState, DCRIT, FUEL_EOL, FUEL_INIT
 from app.core.physics import rk4_step, fuel_consumed
 from app.core.ground_stations import has_line_of_sight
+from scipy.spatial import cKDTree
 
 router = APIRouter()
 logger = logging.getLogger("acm.simulation")
@@ -57,15 +58,26 @@ async def simulate_step(payload: SimulateStepRequest):
                 logger.info("Burn exec | %s | %s | dv=%.4f km/s | fuel=%.2fkg",
                             burn.satellite_id, burn.burn_id, dv_mag, sat.fuel_kg)
 
-        # Collision detection
+        # Collision detection (Optimized with KD-Tree)
         sats = [o for o in ACMState.objects.values() if o.type == "SATELLITE"]
         debs = [o for o in ACMState.objects.values() if o.type == "DEBRIS"]
-        for sat in sats:
-            for deb in debs:
-                if float(np.linalg.norm(sat.r - deb.r)) < DCRIT:
-                    collisions += 1
-                    sat.status  = "OFFLINE"
-                    logger.critical("COLLISION | %s <-> %s", sat.id, deb.id)
+        
+        if sats and debs:
+            deb_positions = np.array([deb.r for deb in debs])
+            tree = cKDTree(deb_positions)
+            sat_positions = np.array([sat.r for sat in sats])
+            
+            # Find all debris within DCRIT of each satellite
+            results = tree.query_ball_point(sat_positions, r=DCRIT)
+            
+            for sat_idx, deb_indices in enumerate(results):
+                if deb_indices:
+                    sat = sats[sat_idx]
+                    for deb_idx in deb_indices:
+                        deb = debs[deb_idx]
+                        collisions += 1
+                        sat.status = "OFFLINE"
+                        logger.critical("COLLISION | %s <-> %s", sat.id, deb.id)
 
         # Status updates
         for sat in sats:

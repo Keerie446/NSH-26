@@ -11,3 +11,5 @@ node_modules/
 .env
 *.db
 .DS_Store
+server.log
+*.log

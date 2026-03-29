@@ -22,11 +22,12 @@ async def get_snapshot():
         if obj.type == "SATELLITE":
             satellites_out.append(SatelliteSnapshot(
                 id=obj.id, lat=round(lat,4), lon=round(lon,4),
+                eci_x=round(obj.r[0],3), eci_y=round(obj.r[1],3),
                 fuel_kg=round(obj.fuel_kg,3), status=obj.status
             ))
         else:
-            # Compact [id, lat, lon, alt_km] — minimises JSON payload for 10k+ objects
-            debris_out.append([obj.id, round(lat,3), round(lon,3), round(alt,2)])
+            # Compact [id, lat, lon, alt_km, eci_x, eci_y]
+            debris_out.append([obj.id, round(lat,3), round(lon,3), round(alt,2), round(obj.r[0],3), round(obj.r[1],3)])
 
     return SnapshotResponse(
         timestamp=ACMState.sim_time,

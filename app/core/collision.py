@@ -1,15 +1,14 @@
-"""NSH 2026 — Conjunction Assessment: O(N log N) via KDTree"""
+"""NSH 2026 — Conjunction Assessment using spatial indexing."""
 import numpy as np
 import logging
 from datetime import datetime, timedelta, timezone
-from scipy.spatial import KDTree
+from scipy.spatial import cKDTree
 from app.core.state import ACMState, DCRIT, MAX_DV, ScheduledBurn
 from app.core.physics import propagate_trajectory
 
 logger     = logging.getLogger("acm.collision")
 LOOKAHEAD  = 86400   # 24 hours
 STEP_S     = 60
-COARSE_KM  = 100.0
 
 async def run_conjunction_assessment():
     satellites  = ACMState.satellites()
@@ -20,27 +19,37 @@ async def run_conjunction_assessment():
     logger.info("CA: %d sats x %d debris", len(satellites), len(debris_list))
     steps = int(LOOKAHEAD / STEP_S) + 1
 
-    # Propagate all debris trajectories → shape (N_deb, steps, 3)
+    sat_traj = np.empty((len(satellites), steps, 3))
+    for i, sat in enumerate(satellites):
+        sat_traj[i] = propagate_trajectory(sat.r, sat.v, LOOKAHEAD, STEP_S)[:steps, :3]
+
+    # Propagate all debris trajectories -> shape (N_deb, steps, 3)
     deb_traj = np.empty((len(debris_list), steps, 3))
     for i, deb in enumerate(debris_list):
-        t = propagate_trajectory(deb.r, deb.v, LOOKAHEAD, STEP_S)
-        deb_traj[i] = t[:steps, :3]
+        deb_traj[i] = propagate_trajectory(deb.r, deb.v, LOOKAHEAD, STEP_S)[:steps, :3]
 
-    for sat in satellites:
-            sat_traj = propagate_trajectory(sat.r, sat.v, LOOKAHEAD, STEP_S)
-            sat_pos  = sat_traj[:steps, :3]
+    base_time = ACMState.sim_time or datetime.now(timezone.utc)
 
-            for step_idx in range(steps):
-                sp   = sat_pos[step_idx]
-                dp   = deb_traj[:, step_idx, :]
-                tree = KDTree(dp)
-                for deb_idx in tree.query_ball_point(sp, COARSE_KM):
-                    dist = float(np.linalg.norm(sp - dp[deb_idx]))
-                    if dist < DCRIT:
-                        tca = (ACMState.sim_time or datetime.now(timezone.utc)) \
-                              + timedelta(seconds=step_idx * STEP_S)
-                        await ACMState.log_cdm(sat.id, debris_list[deb_idx].id, tca, dist)
-                        await _auto_schedule_evasion(sat, tca, debris_list[deb_idx], dist)
+    for step_idx in range(steps):
+        debris_positions = deb_traj[:, step_idx, :]
+        tree = cKDTree(debris_positions)
+        sat_positions = sat_traj[:, step_idx, :]
+
+        distances, debris_indices = tree.query(
+            sat_positions,
+            k=1,
+            distance_upper_bound=DCRIT,
+        )
+
+        for sat_idx, sat in enumerate(satellites):
+            dist = float(distances[sat_idx])
+            deb_idx = int(debris_indices[sat_idx])
+            if not np.isfinite(dist) or deb_idx >= len(debris_list):
+                continue
+
+            tca = base_time + timedelta(seconds=step_idx * STEP_S)
+            await ACMState.log_cdm(sat.id, debris_list[deb_idx].id, tca, dist)
+            await _auto_schedule_evasion(sat, tca, debris_list[deb_idx], dist)
 
     logger.info("CA done. Active CDMs: %d", ACMState.active_cdm_count())
 

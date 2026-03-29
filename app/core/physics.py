@@ -62,6 +62,18 @@ def rtn_to_eci_matrix(r, v):
 def dv_rtn_to_eci(dv_rtn, r, v):
     return rtn_to_eci_matrix(r, v) @ dv_rtn
 
+def latlon_to_eci(lat, lon, alt, gmst_rad=0.0):
+    """Convert latitude, longitude, altitude to ECI coordinates"""
+    lat_rad = np.radians(lat)
+    lon_rad = np.radians(lon) + np.radians(gmst_rad)
+    r = RE + alt
+    
+    x = r * np.cos(lat_rad) * np.cos(lon_rad)
+    y = r * np.cos(lat_rad) * np.sin(lon_rad)
+    z = r * np.sin(lat_rad)
+    
+    return np.array([x, y, z])
+
 def eci_to_latlon(r, gmst_rad=0.0):
     x, y, z = r
     r_mag   = np.linalg.norm(r)

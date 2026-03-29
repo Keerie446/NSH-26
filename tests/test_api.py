@@ -30,7 +30,7 @@ DEB_PAYLOAD = {
 }
 
 def test_health():
-    r = client.get("/")
+    r = client.get("/health")
     assert r.status_code == 200
     assert r.json()["status"] == "ACM online"
 
@@ -93,7 +93,7 @@ def test_snapshot():
     assert "debris_cloud" in body
     assert len(body["satellites"]) >= 1
     for item in body["debris_cloud"]:
-        assert len(item) == 4   # [id, lat, lon, alt]
+        assert len(item) == 6   # [id, lat, lon, alt, eci_x, eci_y]
 
 
 def test_cdm_log_endpoint():

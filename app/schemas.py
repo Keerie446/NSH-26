@@ -81,6 +81,8 @@ class SatelliteSnapshot(BaseModel):
     id: str
     lat: float
     lon: float
+    eci_x: float
+    eci_y: float
     fuel_kg: float
     status: Literal["NOMINAL", "EVADING", "RECOVERING", "EOL", "OFFLINE"]
 
@@ -119,4 +121,4 @@ class BullseyeResponse(BaseModel):
 class SnapshotResponse(BaseModel):
     timestamp: datetime
     satellites: List[SatelliteSnapshot]
-    debris_cloud: List[list]
+    debris_cloud: List[list]  # [id, lat, lon, alt_km, eci_x, eci_y]
