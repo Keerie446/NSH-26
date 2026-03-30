@@ -55,6 +55,10 @@ async def simulate_step(payload: SimulateStepRequest):
                 sat.last_burn_time = burn.burn_time
                 sat.status      = "EVADING"
                 burns_done      += 1
+                ACMState.executed_burns.append(burn)
+                if len(ACMState.executed_burns) > 20:
+                    ACMState.executed_burns.pop(0)
+
                 logger.info("Burn exec | %s | %s | dv=%.4f km/s | fuel=%.2fkg",
                             burn.satellite_id, burn.burn_id, dv_mag, sat.fuel_kg)
 

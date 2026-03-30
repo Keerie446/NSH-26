@@ -73,6 +73,7 @@ class _ACMState:
     def __init__(self):
         self.objects:   Dict[str, ObjectState] = {}
         self.burns:     List[ScheduledBurn]    = []
+        self.executed_burns: List[ScheduledBurn] = []
         self.cdm_log:   List[dict]             = []
         self.sim_time:  Optional[datetime]     = None
         self._lock      = asyncio.Lock()

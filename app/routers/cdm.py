@@ -2,7 +2,7 @@
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
-from app.schemas import CDMLogResponse, CDMEvent, CollisionAlertsResponse, CollisionAlert, BullseyeResponse
+from app.schemas import CDMLogResponse, CDMEvent, CollisionAlertsResponse, CollisionAlert, BullseyeResponse, BullseyePoint
 from app.core.state import ACMState
 
 router = APIRouter()

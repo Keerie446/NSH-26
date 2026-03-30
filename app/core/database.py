@@ -131,5 +131,5 @@ def clear_all_objects():
     conn.commit()
     conn.close()
 
-# Initialize on import
-init_database()
+# Initialize on import removed to avoid side-effects
+# init_database()

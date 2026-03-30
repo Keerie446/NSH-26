@@ -16,6 +16,21 @@ async def get_snapshot():
 
     satellites_out = []
     debris_out     = []
+    maneuvers_out  = []
+    
+    for b in ACMState.executed_burns:
+        maneuvers_out.append({
+            "satellite": b.satellite_id,
+            "time": b.burn_time.isoformat(),
+            "type": "EVASION" if "SLOW" in b.burn_id else ("RECOVERY" if "RECOVER" in b.burn_id else "MANEUVER")
+        })
+
+    for b in ACMState.burns:
+        maneuvers_out.append({
+            "satellite": b.satellite_id,
+            "time": b.burn_time.isoformat(),
+            "type": "EVASION" if "SLOW" in b.burn_id else ("RECOVERY" if "RECOVER" in b.burn_id else "MANEUVER")
+        })
 
     for obj in ACMState.objects.values():
         lat, lon, alt = eci_to_latlon(obj.r)
@@ -32,7 +47,8 @@ async def get_snapshot():
     return SnapshotResponse(
         timestamp=ACMState.sim_time,
         satellites=satellites_out,
-        debris_cloud=debris_out
+        debris_cloud=debris_out,
+        maneuvers=maneuvers_out
     )
 
 

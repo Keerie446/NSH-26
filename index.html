@@ -7,8 +7,9 @@
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- D3.js -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Chart.js for heatmap -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     
@@ -114,12 +115,7 @@
             border-radius: 6px;
             position: relative;
             overflow: hidden;
-        }
-        
-        #orbital-svg {
-            width: 100%;
-            height: 100%;
-            border-radius: 6px;
+            z-index: 1;
         }
         
         .map-legend {
@@ -418,9 +414,7 @@
                 <div class="col-lg-6">
                     <div class="panel">
                         <div class="panel-title">2D Orbital Map</div>
-                        <div id="earth-map">
-                            <svg id="orbital-svg"></svg>
-                        </div>
+                        <div id="earth-map"></div>
                         <div class="map-legend">
                             <div class="legend-item">
                                 <div class="legend-dot legend-satellite"></div>
@@ -488,9 +482,8 @@
         let lastUpdateTime = null;
         let updateInterval = null;
         let map = null;
-        let satelliteMarkers = [];
-        let debrisMarkers = [];
-        let orbitLines = [];
+        let satelliteGroup = null;
+        let debrisGroup = null;
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', () => {
@@ -526,7 +519,7 @@
                 updateEarthMap(snapshot);
                 updateBullseyeChart(cdmLog);
                 updateFuelHeatmap(snapshot);
-                updateManeuverTimeline(maneuverPlan);
+                updateManeuverTimeline(snapshot);
 
             } catch (error) {
                 console.error('Dashboard update error:', error);
@@ -551,113 +544,63 @@
             lastUpdateTime = timestamp;
         }
 
-        // Initialize Orbital SVG (Replaced Leaflet Map)
-        // ─── Panel 1: Orbital Map ───────────────────────────────────────────────
+        // ─── Panel 1: Earth Map with Leaflet ───────────────────────────────────────────────
+        function initMap() {
+            if (map) return;
+            map = L.map('earth-map').setView([0, 0], 2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+            satelliteGroup = L.layerGroup().addTo(map);
+            debrisGroup = L.layerGroup().addTo(map);
+        }
+
         function updateEarthMap(snapshot) {
-            const svg = d3.select('#orbital-svg');
-            svg.selectAll('*').remove(); // Clear previous drawing
-
-            const container = document.getElementById('earth-map');
-            const width = container.clientWidth;
-            const height = container.clientHeight;
-            const centerX = width / 2;
-            const centerY = height / 2;
-
-            // Compute dynamic scale based on furthest object distance
-            let maxDist = 8000; 
-            if (snapshot.satellites && snapshot.satellites.length > 0) {
-                snapshot.satellites.forEach(s => {
-                    const d = Math.sqrt(s.eci_x*s.eci_x + s.eci_y*s.eci_y);
-                    if (d > maxDist) maxDist = d;
-                });
-            }
-            if (snapshot.debris_cloud && snapshot.debris_cloud.length > 0) {
-                snapshot.debris_cloud.forEach(d => {
-                    // debris formatting: [id, lat, lon, alt_km, eci_x, eci_y]
-                    const dist = Math.sqrt(d[4]*d[4] + d[5]*d[5]);
-                    if (dist > maxDist) maxDist = dist;
-                });
-            }
-
-            maxDist *= 1.25; // Add 25% padding so objects don't clip the edge
-            // Keep a minimum bounds of GEO orbit (42000km) if max is too small, 
-            // but LEO is mostly what we care about here.
+            if (!map) initMap();
             
-            const scale = Math.min(width, height) / (2 * maxDist);
+            satelliteGroup.clearLayers();
+            debrisGroup.clearLayers();
 
-            // Draw Earth Center Marker
-            svg.append('circle')
-                .attr('cx', centerX)
-                .attr('cy', centerY)
-                .attr('r', 6371 * scale) // Earth Radius
-                .attr('fill', '#1a3a4d')
-                .attr('stroke', '#8b949e')
-                .attr('stroke-width', 2);
+            if (snapshot.satellites && snapshot.satellites.length > 0) {
+                snapshot.satellites.forEach(sat => {
+                    if (sat.lat !== undefined && sat.lon !== undefined) {
+                        const marker = L.circleMarker([sat.lat, sat.lon], {
+                            radius: 6,
+                            fillColor: '#58a6ff',
+                            color: '#fff',
+                            weight: 1,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).bindPopup(`<b>${sat.id}</b><br>Lat: ${sat.lat}<br>Lon: ${sat.lon}<br>Status: ${sat.status}`);
+                        marker.addTo(satelliteGroup);
+                    }
+                });
+            }
 
-            // Draw Orbit Rings for reference
-            [7000, 10000, 20000].forEach(r => {
-                if (r > maxDist) return;
-                svg.append('circle')
-                    .attr('cx', centerX)
-                    .attr('cy', centerY)
-                    .attr('r', r * scale)
-                    .attr('fill', 'none')
-                    .attr('stroke', 'rgba(139, 148, 158, 0.2)')
-                    .attr('stroke-width', 1)
-                    .attr('stroke-dasharray', '3,3');
-            });
-
-            // Draw Debris
             if (snapshot.debris_cloud && snapshot.debris_cloud.length > 0) {
                 snapshot.debris_cloud.forEach(deb => {
-                    const px = centerX + (deb[4] * scale);
-                    const py = centerY - (deb[5] * scale); // Invert Y axis
-                    
-                    svg.append('circle')
-                        .attr('cx', px)
-                        .attr('cy', py)
-                        .attr('r', 3)
-                        .attr('fill', '#f85149')
-                        .attr('opacity', 0.8);
+                    // debris formatting: [id, lat, lon, alt_km, eci_x, eci_y]
+                    if (deb[1] !== undefined && deb[2] !== undefined) {
+                        const marker = L.circleMarker([deb[1], deb[2]], {
+                            radius: 3,
+                            fillColor: '#f85149',
+                            color: '#f85149',
+                            weight: 0,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).bindPopup(`<b>${deb[0]}</b><br>Lat: ${deb[1]}<br>Lon: ${deb[2]}<br>Alt: ${deb[3]} km`);
+                        marker.addTo(debrisGroup);
+                    }
                 });
             }
 
-            // Draw Satellites & Traces
-            if (snapshot.satellites && snapshot.satellites.length > 0) {
-                snapshot.satellites.forEach(sat => {
-                    const r = Math.sqrt(sat.eci_x*sat.eci_x + sat.eci_y*sat.eci_y);
-                    // Basic circular trace
-                    svg.append('circle')
-                        .attr('cx', centerX)
-                        .attr('cy', centerY)
-                        .attr('r', r * scale)
-                        .attr('fill', 'none')
-                        .attr('stroke', 'rgba(255, 166, 87, 0.4)')
-                        .attr('stroke-dasharray', '4,4')
-                        .attr('stroke-width', 1.5);
-                });
-
-                snapshot.satellites.forEach(sat => {
-                    const px = centerX + (sat.eci_x * scale);
-                    const py = centerY - (sat.eci_y * scale);
-                    
-                    svg.append('circle')
-                        .attr('cx', px)
-                        .attr('cy', py)
-                        .attr('r', 6)
-                        .attr('fill', '#58a6ff')
-                        .attr('opacity', 1.0)
-                        .attr('stroke', '#fff')
-                        .attr('stroke-width', 1);
-                        
-                    svg.append('text')
-                        .attr('x', px + 10)
-                        .attr('y', py + 4)
-                        .attr('fill', '#c9d1d9')
-                        .attr('font-size', '10px')
-                        .style('text-shadow', '0 0 3px #000')
-                        .text(sat.id);
-                });
+            // Auto-pan to fit all data
+            const bounds = L.featureGroup([satelliteGroup, debrisGroup]).getBounds();
+            if (bounds.isValid() && (!map.focused || lastUpdateTime === snapshot.timestamp)) {
+                map.fitBounds(bounds, { maxZoom: 4, animate: true, padding: [50, 50] });
+                map.focused = true;
             }
         }
 
@@ -728,6 +671,7 @@
                 circle.setAttribute('cy', y);
                 circle.setAttribute('r', 5);
                 circle.setAttribute('class', 'collision-point');
+                circle.setAttribute('fill', point.miss_dist_km < 0.1 ? '#f85149' : '#e3b341'); // Dynamic color based on risk
                 svg.appendChild(circle);
 
                 // Draw risk radius (100m critical)
@@ -798,11 +742,11 @@
         }
 
         // ─── Panel 4: Maneuver Timeline ───────────────────────────────────────
-        function updateManeuverTimeline(maneuverPlan) {
+        function updateManeuverTimeline(snapshot) {
             const container = document.getElementById('timeline-events');
             container.innerHTML = '';
 
-            if (!maneuverPlan || !maneuverPlan.burns || maneuverPlan.burns.length === 0) {
+            if (!snapshot || !snapshot.maneuvers || snapshot.maneuvers.length === 0) {
                 const noData = document.createElement('div');
                 noData.className = 'no-data';
                 noData.style.position = 'absolute';
@@ -813,25 +757,27 @@
                 return;
             }
 
-            // Calculate positions (spread events across timeline)
-            const burns = maneuverPlan.burns;
-            const width = 500;
-            const minX = 150;
-            const maxX = width - 50;
-            const spacing = (maxX - minX) / (burns.length + 1);
+            // Dynamically widen container based on number of maneuvers to prevent overlapping!
+            const burns = snapshot.maneuvers;
+            const minX = 100;
+            const spacing = 120; // 120 pixels per burn
+            const totalWidth = minX + (spacing * burns.length) + 50;
+            
+            // Adjust the actual DOM element width inside scroll container
+            const scroller = container.parentElement;
+            scroller.style.width = `${Math.max(totalWidth, scroller.parentElement.clientWidth)}px`;
 
             burns.forEach((burn, idx) => {
-                const x = minX + spacing * (idx + 1);
-                const isBurn1 = burn.type === 'evasion' && burn.burn_id.includes('SLOW');
-                const isBurn2 = burn.type === 'evasion' && burn.burn_id.includes('RECOVER');
+                const x = minX + spacing * idx;
+                const isBurn1 = burn.type === 'EVASION';
+                const isBurn2 = burn.type === 'RECOVERY';
                 const type = isBurn1 ? 'burn1' : isBurn2 ? 'burn2' : 'evasion';
 
                 const event = document.createElement('div');
                 event.className = `timeline-event ${type}`;
                 event.style.left = `${x}px`;
 
-                const startTime = new Date(burn.start);
-                const endTime = new Date(burn.end);
+                const startTime = new Date(burn.time);
                 const timeStr = startTime.toLocaleTimeString();
 
                 event.innerHTML = `

@@ -122,3 +122,4 @@ class SnapshotResponse(BaseModel):
     timestamp: datetime
     satellites: List[SatelliteSnapshot]
     debris_cloud: List[list]  # [id, lat, lon, alt_km, eci_x, eci_y]
+    maneuvers: Optional[List[dict]] = None

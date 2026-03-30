@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from scipy.spatial import cKDTree
 from app.core.state import ACMState, DCRIT, MAX_DV, ScheduledBurn
-from app.core.physics import propagate_trajectory
+from app.core.physics import propagate_trajectory, dv_rtn_to_eci
 
 logger     = logging.getLogger("acm.collision")
 LOOKAHEAD  = 86400   # 24 hours
@@ -35,21 +35,19 @@ async def run_conjunction_assessment():
         tree = cKDTree(debris_positions)
         sat_positions = sat_traj[:, step_idx, :]
 
-        distances, debris_indices = tree.query(
-            sat_positions,
-            k=1,
-            distance_upper_bound=DCRIT,
-        )
+        candidate_lists = tree.query_ball_point(sat_positions, r=5.0)
 
         for sat_idx, sat in enumerate(satellites):
-            dist = float(distances[sat_idx])
-            deb_idx = int(debris_indices[sat_idx])
-            if not np.isfinite(dist) or deb_idx >= len(debris_list):
-                continue
+            for deb_idx in candidate_lists[sat_idx]:
+                if deb_idx >= len(debris_list):
+                    continue
 
-            tca = base_time + timedelta(seconds=step_idx * STEP_S)
-            await ACMState.log_cdm(sat.id, debris_list[deb_idx].id, tca, dist)
-            await _auto_schedule_evasion(sat, tca, debris_list[deb_idx], dist)
+                dist = float(np.linalg.norm(sat_positions[sat_idx] - debris_positions[deb_idx]))
+                tca = base_time + timedelta(seconds=step_idx * STEP_S)
+                await ACMState.log_cdm(sat.id, debris_list[deb_idx].id, tca, dist)
+                
+                if dist < DCRIT:
+                    await _auto_schedule_evasion(sat, tca, debris_list[deb_idx], dist)
 
     logger.info("CA done. Active CDMs: %d", ACMState.active_cdm_count())
 
@@ -85,11 +83,12 @@ async def _auto_schedule_evasion(sat, tca, deb, miss_dist_km):
     
     # Burn 1: Retrograde impulse to avoid debris (slow down)
     dv1_mag = min(0.008, MAX_DV)  # 8 m/s retrograde
-    dv1 = np.array([-dv1_mag, 0.0, 0.0])  # Simplified in-track deceleration
+    dv_rtn1 = np.array([0.0, -dv1_mag, 0.0])  # negative T = retrograde
     
     # Burn 2: Prograde impulse to return to nominal orbit (speed up)
     dv2_mag = min(0.008, MAX_DV)  # 8 m/s prograde
-    dv2 = np.array([dv2_mag, 0.0, 0.0])  # Simplified in-track acceleration
+    dv_rtn2 = np.array([0.0, dv2_mag, 0.0])  # positive T = prograde
+    dv2 = dv_rtn_to_eci(dv_rtn2, sat.r, sat.v)
     
     # Try to use LSTM for trajectory-aware correction if available
     try:
@@ -97,9 +96,11 @@ async def _auto_schedule_evasion(sat, tca, deb, miss_dist_km):
         state_history = np.tile(np.concatenate([sat.r, sat.v]), (6, 1))
         lstm_correction = get_trajectory_correction(state_history)
         # Blend LSTM correction with nominal evasion
-        dv1 = 0.7 * dv1 + 0.3 * lstm_correction
+        dv_rtn1 = 0.7 * dv_rtn1 + 0.3 * lstm_correction
     except Exception as e:
         logger.debug(f"LSTM correction failed: {e}, using nominal evasion")
+    
+    dv1 = dv_rtn_to_eci(dv_rtn1, sat.r, sat.v)
     
     # Schedule both burns
     burn1_id = f"AUTO_EVASION_SLOW_{sat.id}_{int(tca.timestamp())}"
