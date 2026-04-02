@@ -81,8 +81,8 @@ class SatelliteSnapshot(BaseModel):
     id: str
     lat: float
     lon: float
-    eci_x: float
-    eci_y: float
+    eci_x: Optional[float] = None
+    eci_y: Optional[float] = None
     fuel_kg: float
     status: Literal["NOMINAL", "EVADING", "RECOVERING", "EOL", "OFFLINE"]
 

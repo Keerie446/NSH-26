@@ -30,6 +30,8 @@ async def run_conjunction_assessment():
 
     base_time = ACMState.sim_time or datetime.now(timezone.utc)
 
+    closest_approaches = {}
+
     for step_idx in range(steps):
         debris_positions = deb_traj[:, step_idx, :]
         tree = cKDTree(debris_positions)
@@ -44,10 +46,16 @@ async def run_conjunction_assessment():
 
                 dist = float(np.linalg.norm(sat_positions[sat_idx] - debris_positions[deb_idx]))
                 tca = base_time + timedelta(seconds=step_idx * STEP_S)
-                await ACMState.log_cdm(sat.id, debris_list[deb_idx].id, tca, dist)
+                pair_key = f"{sat.id}:{debris_list[deb_idx].id}"
                 
-                if dist < DCRIT:
-                    await _auto_schedule_evasion(sat, tca, debris_list[deb_idx], dist)
+                if pair_key not in closest_approaches or dist < closest_approaches[pair_key][1]:
+                    closest_approaches[pair_key] = (tca, dist, sat, debris_list[deb_idx])
+
+    for pair_key, (tca, dist, sat, deb) in closest_approaches.items():
+        await ACMState.log_cdm(sat.id, deb.id, tca, dist)
+        
+        if dist < DCRIT:
+            await _auto_schedule_evasion(sat, tca, deb, dist)
 
     logger.info("CA done. Active CDMs: %d", ACMState.active_cdm_count())
 
@@ -71,7 +79,9 @@ async def _auto_schedule_evasion(sat, tca, deb, miss_dist_km):
     # Calculate collision probability using XGBoost
     rel_velocity = float(np.linalg.norm(sat.v - deb.v))
     fuel_fraction = sat.fuel_kg / 50.0  # normalized to initial 50kg
-    approach_angle = 45.0  # simplified; real impl would compute from relative position
+    # Calculate approach angle using velocity vectors
+    cos_theta = np.dot(sat.v, deb.v) / (np.linalg.norm(sat.v) * np.linalg.norm(deb.v))
+    approach_angle = float(np.degrees(np.arccos(np.clip(cos_theta, -1.0, 1.0))))
     collision_prob = get_collision_probability(miss_dist_km, rel_velocity, fuel_fraction, approach_angle)
     
     logger.info("Collision probability: %.3f | sat=%s | deb=%s | miss=%.4f km", 

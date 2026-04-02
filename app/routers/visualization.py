@@ -59,12 +59,13 @@ async def get_maneuver_gantt():
 
     burns = []
     for b in ACMState.burns:
+        burn_type = "EVADE" if "SLOW" in b.burn_id else ("RETURN" if "RECOVER" in b.burn_id else "BURN")
         burns.append({
             "satellite_id": b.satellite_id,
             "burn_id": b.burn_id,
             "start": b.burn_time.isoformat(),
             "end": (b.burn_time + timedelta(seconds=600)).isoformat(),
-            "type": "evasion"
+            "type": burn_type
         })
 
     return {"timestamp": ACMState.sim_time, "burns": burns}
