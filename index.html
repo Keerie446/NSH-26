@@ -3,1488 +3,1028 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NSH 2026 — ACM Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<title>NSH 2026 — ACM Mission Control | ISRO × IIT Delhi</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-/* ═══════════════════════════════════════════════════════
-   DESIGN LANGUAGE: Military Space Operations — Light / Amber
-   Inspired by NASA Mission Control, cold-war radar screens
-   ═══════════════════════════════════════════════════════ */
-:root {
-  --bg0:    #ffffff;   /* white */
-  --bg1:    #f6f8fa;   /* light gray */
-  --bg2:    #ffffff;   /* white */
-  --bg3:    #f0f2f5;   /* elevated */
-  --border: #d1d9e0;
-  --border2:#c7ccd1;
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#FFFFFF;--bg2:#F5F5F5;--bg3:#EEEEEE;--bg4:#E8E8E8;
+  --border:#CCCCCC;--border2:#DDDDDD;
+  --text:#222222;--muted:#666666;--dim:#999999;
+  --cyan:#0088FF;--green:#00AA44;--red:#FF3333;--orange:#FF8800;
+  --purple:#8844FF;--yellow:#FFAA00;--blue:#0066FF;
+  --font:'Courier New',monospace;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font)}
 
-  --amber:  #e6a817;
-  --amber2: #f0c040;
-  --amber-dim:#7a5a0a;
-  --cyan:   #39d0d8;
-  --cyan-dim:#1a5f63;
-  --green:  #3fb950;
-  --red:    #f85149;
-  --orange: #d29922;
-  --purple: #bc8cff;
-  --blue:   #58a6ff;
-  --muted:  #656d76;
-  --text:   #24292f;
-  --text2:  #1f2328;
+/* ── SCANLINE OVERLAY ─────────────────────────────────────── */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.02) 2px,rgba(0,0,0,.02) 4px)}
 
-  --font-mono: 'Space Mono', monospace;
-  --font-ui:   'Syne', sans-serif;
-}
+/* ── LAYOUT ───────────────────────────────────────────────── */
+.app{display:flex;height:100vh;overflow:hidden}
 
-*, *::before, *::after { margin:0; padding:0; box-sizing:border-box }
+/* ── SIDEBAR ──────────────────────────────────────────────── */
+.sidebar{width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;transition:width .3s;overflow:hidden;z-index:100}
+.sidebar.collapsed{width:52px}
+.sidebar-header{padding:14px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-icon{width:28px;height:28px;flex-shrink:0;border-radius:50%;border:1.5px solid var(--cyan);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--cyan)}
+.logo-text{font-size:11px;font-weight:700;color:var(--cyan);letter-spacing:2px;white-space:nowrap}
+.logo-sub{font-size:9px;color:var(--muted);letter-spacing:1px;white-space:nowrap;margin-top:1px}
+.toggle-btn{margin-left:auto;cursor:pointer;color:var(--muted);font-size:16px;flex-shrink:0;padding:2px;user-select:none}
+.toggle-btn:hover{color:var(--cyan)}
 
-html { scroll-behavior: smooth }
+.nav-section{font-size:9px;color:var(--dim);letter-spacing:2px;padding:12px 14px 4px;white-space:nowrap;overflow:hidden}
+.sidebar.collapsed .nav-section{visibility:hidden}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;
+  border-left:2px solid transparent;transition:all .15s;white-space:nowrap;overflow:hidden}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:var(--bg4);border-left-color:var(--cyan);color:var(--cyan)}
+.nav-icon{font-size:14px;flex-shrink:0;width:20px;text-align:center}
+.nav-label{font-size:11px;letter-spacing:1px;white-space:nowrap}
+.sidebar.collapsed .nav-label,.sidebar.collapsed .nav-section,.sidebar.collapsed .logo-text,.sidebar.collapsed .logo-sub{display:none}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;flex-shrink:0}
+.nav-badge.green{background:var(--green);color:#000}
+.nav-badge.orange{background:var(--orange);color:#000}
 
-body {
-  background: var(--bg0);
-  color: var(--text);
-  font-family: var(--font-ui);
-  min-height: 100vh;
-  overflow-x: hidden;
-}
+.sidebar-footer{margin-top:auto;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0}
+.system-status{font-size:9px;color:var(--muted);letter-spacing:1px}
+.status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px}
+.blink{animation:blink 1.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
 
-/* ══════════════════════════════════════
-   HEADER
-══════════════════════════════════════ */
-header {
-  background: linear-gradient(90deg, var(--bg1) 0%, #f0f2f5 100%);
-  border-bottom: 1px solid var(--amber-dim);
-  padding: 10px 20px;
-  display: flex; align-items: center; justify-content: space-between;
-  position: sticky; top:0; z-index:1000;
-}
+/* ── MAIN AREA ────────────────────────────────────────────── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
-.acm-logo {
-  display: flex; align-items: center; gap: 12px;
-}
-.logo-icon {
-  width:34px; height:34px;
-  border: 1.5px solid var(--amber);
-  border-radius: 50%;
-  display: flex; align-items:center; justify-content:center;
-  animation: spin 20s linear infinite;
-  position:relative;
-}
-.logo-icon::after {
-  content:'';
-  position:absolute;
-  width:10px; height:10px;
-  background: var(--amber);
-  border-radius:50%;
-  top:50%; left:50%; transform:translate(-50%,-50%);
-  box-shadow:0 0 8px var(--amber);
-}
-@keyframes spin { to { transform: rotate(360deg) } }
+/* ── TOP BAR ──────────────────────────────────────────────── */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;
+  height:44px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.page-title{font-size:12px;font-weight:700;letter-spacing:2px;color:var(--cyan);margin-right:8px}
+.stat-chip{background:var(--bg3);border:1px solid var(--border);padding:3px 10px;border-radius:2px;
+  font-size:10px;letter-spacing:1px;display:flex;align-items:center;gap:5px}
+.chip-dot{width:6px;height:6px;border-radius:50%}
+.alert-bar{background:rgba(255,61,87,.08);border-bottom:1px solid var(--red);padding:4px 16px;
+  font-size:10px;letter-spacing:1.5px;color:var(--red);display:none;flex-shrink:0}
+.alert-bar.show{display:flex;align-items:center;gap:8px}
 
-.acm-title {
-  font-size: 15px; font-weight: 800; color: var(--text2);
-  letter-spacing: .5px;
-  text-transform: uppercase;
-}
-.acm-sub {
-  font-size: 9px; color: var(--amber); font-family: var(--font-mono);
-  letter-spacing: 2px; margin-top:1px;
-}
+/* ── CONTENT ──────────────────────────────────────────────── */
+.content{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.section{display:none;flex:1;flex-direction:column;overflow:hidden}
+.section.active{display:flex}
 
-.hdr-stats {
-  display: flex; align-items: center; gap: 8px;
-}
-.stat-chip {
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: 4px;
-  padding: 5px 10px;
-  font-size: 11px; font-family: var(--font-mono);
-  display:flex; align-items:center; gap:6px;
-  color: var(--muted);
-}
-.stat-chip .val { color: var(--text2); font-weight: 700 }
-.dot {
-  width:7px; height:7px; border-radius:50%; flex-shrink:0;
-}
-.dot-green  { background:var(--green);  box-shadow:0 0 5px var(--green) }
-.dot-red    { background:var(--red);    box-shadow:0 0 5px var(--red) }
-.dot-amber  { background:var(--amber);  box-shadow:0 0 5px var(--amber) }
-.dot-cyan   { background:var(--cyan);   box-shadow:0 0 5px var(--cyan) }
-.dot-muted  { background:var(--muted) }
-.pulse { animation: blink 1.5s ease-in-out infinite }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+/* ── SPLIT LAYOUT ─────────────────────────────────────────── */
+.split{flex:1;display:grid;overflow:hidden}
+.split-h{grid-template-rows:1fr;grid-template-columns:1fr 360px}
+.split-v{grid-template-rows:1fr 1fr;grid-template-columns:1fr}
 
-.conn-chip {
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: 4px;
-  padding: 5px 10px;
-  font-size:10px; font-family: var(--font-mono);
-  display:flex; align-items:center; gap:6px;
-}
-.sim-time {
-  font-size:11px; font-family:var(--font-mono);
-  color: var(--amber); letter-spacing:.5px;
-}
+/* ── PANEL ────────────────────────────────────────────────── */
+.panel{background:var(--bg2);border:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.panel-hdr{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.panel-title{font-size:10px;font-weight:700;letter-spacing:2px;color:var(--cyan)}
+.panel-badge{margin-left:auto;font-size:9px;background:var(--bg3);border:1px solid var(--border);
+  padding:2px 8px;border-radius:1px;letter-spacing:1px;color:var(--muted)}
+.panel-body{flex:1;overflow:hidden;position:relative}
+.panel-body.pad{padding:12px}
 
-/* ══════════════════════════════════════
-   ALERT BANNER (CDM warnings)
-══════════════════════════════════════ */
-#alert-banner {
-  display:none;
-  background: linear-gradient(90deg, #ffebe9, var(--bg1));
-  border-top: 1px solid var(--red);
-  border-bottom: 1px solid var(--red);
-  padding: 6px 20px;
-  font-size:11px; font-family:var(--font-mono);
-  color: var(--red);
-  letter-spacing:.5px;
-  animation: flash-bg 1s infinite;
-}
-@keyframes flash-bg {
-  0%,100%{background:linear-gradient(90deg,#ffebe9,var(--bg1))}
-  50%{background:linear-gradient(90deg,#ffcecb,var(--bg1))}
-}
+/* ── MAP ──────────────────────────────────────────────────── */
+#map{width:100%;height:100%}
+.map-legend{position:absolute;bottom:12px;left:12px;background:rgba(255,255,255,.95);
+  border:1px solid var(--border);padding:8px 10px;z-index:500;font-size:9px;letter-spacing:1px}
+.leg-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;color:var(--muted)}
+.leg-row:last-child{margin-bottom:0}
+.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.map-info{position:absolute;top:8px;right:8px;background:rgba(255,255,255,.95);
+  border:1px solid var(--border);padding:6px 10px;z-index:500;font-size:9px;
+  display:flex;flex-direction:column;gap:3px}
+.mi-row{display:flex;justify-content:space-between;gap:16px;color:var(--muted);letter-spacing:1px}
+.mi-val{color:var(--cyan)}
 
-/* ══════════════════════════════════════
-   MAIN GRID — 3 rows, mixed columns
-══════════════════════════════════════ */
-.grid {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  grid-template-rows: 440px 360px 340px;
-  gap: 10px;
-  padding: 10px;
-  max-width: 1700px;
-  margin: 0 auto;
-}
+/* ── NARRATION BOX ────────────────────────────────────────── */
+.narration{flex-shrink:0;background:var(--bg3);border-top:1px solid var(--border);padding:10px 14px;min-height:72px;max-height:100px;overflow-y:auto}
+.nar-label{font-size:8px;letter-spacing:2px;color:var(--dim);margin-bottom:4px}
+.nar-text{font-size:11px;color:var(--text);line-height:1.7;letter-spacing:.5px}
+.nar-text span{color:var(--cyan)}
+.nar-text .warn{color:var(--orange)}
+.nar-text .danger{color:var(--red)}
+.nar-text .good{color:var(--green)}
 
-/* Panels */
-.panel {
-  background: var(--bg1);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-  display: flex; flex-direction: column;
-  position: relative;
-}
-.panel::before {
-  /* corner accent */
-  content:'';
-  position:absolute; top:0; left:0;
-  width:32px; height:32px;
-  border-top:2px solid var(--amber);
-  border-left:2px solid var(--amber);
-  border-radius:6px 0 0 0;
-  pointer-events:none; z-index:5;
-}
+/* ── BULLSEYE ─────────────────────────────────────────────── */
+#bullseye-svg{width:100%;height:100%}
 
-.panel-header {
-  padding: 9px 14px;
-  border-bottom: 1px solid var(--border);
-  display:flex; align-items:center; justify-content:space-between;
-  flex-shrink:0; position:relative;
-}
-.panel-title {
-  font-size:11px; font-weight:600; font-family:var(--font-mono);
-  color: var(--amber); letter-spacing: 1.5px; text-transform:uppercase;
-  display:flex; align-items:center; gap:8px;
-}
-.panel-badge {
-  font-size:9px; font-family:var(--font-mono);
-  background: var(--bg3); border:1px solid var(--border2);
-  border-radius:3px; padding:2px 7px; color:var(--muted);
-}
+/* ── CHARTS ───────────────────────────────────────────────── */
+.chart-wrap{position:relative;width:100%;height:100%;padding:12px}
+canvas{max-width:100%;max-height:100%}
 
-.panel-body {
-  flex:1; position:relative; overflow:hidden;
-}
+/* ── FUEL CARDS ───────────────────────────────────────────── */
+.fuel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:12px;overflow-y:auto;height:100%}
+.fc{background:var(--bg3);border:1px solid var(--border);padding:12px;position:relative}
+.fc-id{font-size:9px;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px}
+.fc-pct{font-size:32px;font-weight:700;letter-spacing:-1px;line-height:1}
+.fc-bar-bg{background:var(--bg);height:4px;margin:8px 0;border-radius:0}
+.fc-bar{height:4px;border-radius:0;transition:width .5s}
+.fc-status{font-size:9px;letter-spacing:1.5px;margin-top:4px}
+.fc-kg{font-size:9px;color:var(--dim);margin-top:2px}
+.fc-alert{position:absolute;top:8px;right:8px;width:6px;height:6px;border-radius:50%;background:var(--red)}
 
-/* ══════════════════════════════════════
-   PANEL 1: GROUND TRACK MAP  (row 1, col 1-2... actually col 1)
-   PANEL 2: BULLSEYE (row 1, col 2)
-══════════════════════════════════════ */
+/* ── TIMELINE ─────────────────────────────────────────────── */
+#tl-wrap{overflow-x:auto;height:100%;padding:10px}
+#tl-svg{display:block;min-width:600px}
 
-/* Ground track uses a Canvas-only approach */
-#ground-canvas {
-  width:100%; height:100%;
-  display:block;
-  cursor:crosshair;
-}
+/* ── CDM TABLE ────────────────────────────────────────────── */
+.cdm-table{width:100%;border-collapse:collapse;font-size:10px}
+.cdm-table th{font-size:8px;letter-spacing:2px;color:var(--dim);padding:6px 10px;
+  border-bottom:1px solid var(--border);text-align:left;font-weight:400}
+.cdm-table td{padding:7px 10px;border-bottom:1px solid rgba(30,48,72,.5);letter-spacing:.5px;vertical-align:middle}
+.cdm-table tr:hover td{background:var(--bg3)}
+.risk-chip{padding:2px 6px;font-size:8px;letter-spacing:1px;border-radius:1px}
+.risk-crit{background:rgba(255,61,87,.15);color:var(--red);border:1px solid rgba(255,61,87,.3)}
+.risk-high{background:rgba(255,149,0,.15);color:var(--orange);border:1px solid rgba(255,149,0,.3)}
+.risk-med{background:rgba(255,214,0,.1);color:var(--yellow);border:1px solid rgba(255,214,0,.3)}
+.risk-low{background:rgba(0,255,156,.08);color:var(--green);border:1px solid rgba(0,255,156,.2)}
 
-/* Bullseye */
-#bullseye-svg {
-  width:100%; height:100%;
-  display:block;
-}
+/* ── GROUND STATIONS ──────────────────────────────────────── */
+.gs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;padding:12px;overflow-y:auto}
+.gs-card{background:var(--bg3);border:1px solid var(--border);padding:10px 12px}
+.gs-name{font-size:10px;letter-spacing:1.5px;color:var(--cyan);margin-bottom:6px}
+.gs-row{display:flex;justify-content:space-between;font-size:9px;letter-spacing:.5px;padding:2px 0;color:var(--muted)}
+.gs-val{color:var(--text)}
+.gs-los{display:inline-block;font-size:8px;letter-spacing:1px;padding:2px 6px;margin-top:6px}
+.los-yes{background:rgba(0,255,156,.1);color:var(--green);border:1px solid rgba(0,255,156,.3)}
+.los-no{background:rgba(255,61,87,.08);color:var(--red);border:1px solid rgba(255,61,87,.2)}
 
-/* ══════════════════════════════════════
-   PANEL 3: FUEL HEATMAP (row 2 col 1)
-   PANEL 4: ΔV Efficiency (row 2 col 2)
-══════════════════════════════════════ */
-#fuel-grid {
-  display:grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px,1fr));
-  gap:8px; padding:10px;
-  overflow-y:auto; height:100%;
-}
-.fuel-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius:5px; padding:10px;
-  text-align:center;
-  transition: border-color .2s, transform .15s;
-  cursor:default;
-}
-.fuel-card:hover { border-color: var(--amber); transform:translateY(-1px) }
-.fc-id {
-  font-size:9px; font-family:var(--font-mono); color:var(--muted);
-  margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.fc-pct { font-size:26px; font-weight:800; line-height:1; margin:3px 0 }
-.fc-bar-wrap {
-  background: var(--bg3); border-radius:2px; height:4px;
-  margin:5px 0; overflow:hidden;
-}
-.fc-bar {
-  height:100%; border-radius:2px;
-  transition: width .5s ease, background .3s;
-}
-.fc-status {
-  font-size:8px; font-family:var(--font-mono);
-  text-transform:uppercase; letter-spacing:.8px; margin-top:3px;
-  font-weight:700;
-}
-.fc-kg { font-size:9px; color:var(--muted); margin-top:2px; font-family:var(--font-mono) }
+/* ── OVERVIEW GRID ────────────────────────────────────────── */
+.ov-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px}
+.ov-card{background:var(--bg3);border:1px solid var(--border);padding:14px;position:relative;overflow:hidden}
+.ov-label{font-size:8px;letter-spacing:2px;color:var(--dim);margin-bottom:6px}
+.ov-val{font-size:28px;font-weight:700;letter-spacing:-1px;line-height:1}
+.ov-sub{font-size:9px;color:var(--muted);margin-top:4px;letter-spacing:1px}
+.ov-accent{position:absolute;bottom:0;left:0;right:0;height:2px}
+.ov-bottom{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
-/* EOL badge on fuel card */
-.eol-badge {
-  background:var(--red); color:#fff;
-  font-size:7px; font-family:var(--font-mono);
-  padding:1px 5px; border-radius:2px;
-  display:inline-block; margin-top:4px;
-  letter-spacing:1px;
-}
-.graveyard-badge {
-  background:var(--purple); color:#fff;
-  font-size:7px; font-family:var(--font-mono);
-  padding:1px 5px; border-radius:2px;
-  display:inline-block; margin-top:4px;
-  letter-spacing:1px;
-}
+/* ── SCROLLBAR ────────────────────────────────────────────── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
-/* ΔV efficiency chart */
-#dv-canvas {
-  width:100%; height:100%; display:block;
-}
-
-/* ══════════════════════════════════════
-   PANEL 5: GANTT TIMELINE (row 3, full width)
-══════════════════════════════════════ */
-.panel-full { grid-column: 1 / -1 }
-
-#timeline-wrap {
-  overflow-x:auto; overflow-y:visible; flex:1;
-  padding:8px 12px;
-}
-#timeline-canvas { display:block }
-
-/* ══════════════════════════════════════
-   GRAVEYARD ORBIT BADGE (on map)
-══════════════════════════════════════ */
-#map-overlay-info {
-  position:absolute; top:10px; right:10px; z-index:10;
-  display:flex; flex-direction:column; gap:6px;
-}
-.map-info-chip {
-  background:rgba(255,255,255,.8);
-  border:1px solid var(--border2);
-  backdrop-filter: blur(4px);
-  border-radius:4px; padding:5px 9px;
-  font-size:9px; font-family:var(--font-mono);
-  color:var(--muted); line-height:1.6;
-}
-.map-info-chip span { color:var(--text2) }
-
-/* LEGEND */
-#map-legend {
-  position:absolute; bottom:10px; left:10px; z-index:10;
-  background:rgba(255,255,255,.85);
-  border:1px solid var(--border2);
-  border-radius:4px; padding:8px 10px;
-  backdrop-filter:blur(4px);
-}
-.leg { display:flex; align-items:center; gap:6px; font-size:9px; font-family:var(--font-mono); color:var(--muted); margin-bottom:3px }
-.leg:last-child { margin-bottom:0 }
-.leg-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0 }
-.leg-sq { width:7px; height:7px; border-radius:1px; flex-shrink:0 }
-
-/* ══════════════════════════════════════
-   NO DATA STATES
-══════════════════════════════════════ */
-.no-data {
-  display:flex; align-items:center; justify-content:center;
-  height:100%; min-height:100px;
-  color:var(--muted); font-size:12px; font-family:var(--font-mono);
-  opacity:.6;
-}
-
-/* ══════════════════════════════════════
-   TOOLTIP
-══════════════════════════════════════ */
-#tooltip {
-  position:fixed; z-index:9000;
-  background:var(--bg3); border:1px solid var(--amber-dim);
-  border-radius:4px; padding:7px 10px;
-  font-size:10px; font-family:var(--font-mono); color:var(--text);
-  pointer-events:none; white-space:nowrap;
-  opacity:0; transition:opacity .1s;
-  line-height:1.7;
-}
-
-@media(max-width:900px){
-  .grid { grid-template-columns:1fr; grid-template-rows:auto }
-  .panel-full { grid-column:1 }
-}
+/* ── NO DATA ──────────────────────────────────────────────── */
+.empty{display:flex;align-items:center;justify-content:center;height:100%;
+  color:var(--dim);font-size:10px;letter-spacing:2px}
 </style>
 </head>
 <body>
+<div class="app">
 
-<div id="tooltip"></div>
-
-<!-- ═══════════════ HEADER ═══════════════ -->
-<header>
-  <div class="acm-logo">
-    <div class="logo-icon">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="8" r="3" fill="var(--amber)" opacity=".5"/>
-        <circle cx="8" cy="8" r="1" fill="var(--amber)"/>
-        <ellipse cx="8" cy="8" rx="7" ry="3" fill="none" stroke="var(--amber)" stroke-width=".8" opacity=".6"/>
-      </svg>
-    </div>
+<!-- ══ SIDEBAR ══════════════════════════════════════════════ -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo-icon">ACM</div>
     <div>
-      <div class="acm-title">Autonomous Constellation Manager</div>
-      <div class="acm-sub">NSH-2026 · ISRO · IIT DELHI</div>
+      <div class="logo-text">MISSION CTRL</div>
     </div>
+    <div class="toggle-btn" id="toggle-btn" onclick="toggleSidebar()">&#9776;</div>
   </div>
 
-  <div class="hdr-stats">
-    <div class="stat-chip"><span class="dot dot-cyan"></span>SATS <span class="val" id="hdr-sats">0</span></div>
-    <div class="stat-chip"><span class="dot dot-red"></span>DEBRIS <span class="val" id="hdr-debris">0</span></div>
-    <div class="stat-chip"><span class="dot dot-amber pulse"></span>CDMs <span class="val" id="hdr-cdm">0</span></div>
-    <div class="stat-chip"><span class="dot dot-green"></span>UPTIME <span class="val" id="hdr-uptime">—</span></div>
-    <div class="stat-chip"><span class="dot dot-muted"></span>ΔV USED <span class="val" id="hdr-dv">0.00 m/s</span></div>
-    <div class="conn-chip">
-      <span class="dot dot-muted pulse" id="conn-dot"></span>
-      <span id="conn-text" style="font-size:10px;font-family:var(--font-mono)">CONNECTING</span>
-    </div>
-    <div class="sim-time" id="sim-time">T+00:00:00</div>
+  <div class="nav-section">NAVIGATION</div>
+
+  <div class="nav-item active" data-page="overview" onclick="goTo('overview')">
+    <span class="nav-icon">&#9632;</span>
+    <span class="nav-label">OVERVIEW</span>
   </div>
-</header>
+  <div class="nav-item" data-page="groundtrack" onclick="goTo('groundtrack')">
+    <span class="nav-icon">&#9670;</span>
+    <span class="nav-label">GROUND TRACK</span>
+  </div>
+  <div class="nav-item" data-page="collision" onclick="goTo('collision')">
+    <span class="nav-icon">&#9888;</span>
+    <span class="nav-label">COLLISION RISK</span>
+    <span class="nav-badge" id="nav-cdm-badge">0</span>
+  </div>
+  <div class="nav-item" data-page="fuel" onclick="goTo('fuel')">
+    <span class="nav-icon">&#9650;</span>
+    <span class="nav-label">PROPELLANT</span>
+  </div>
+  <div class="nav-item" data-page="maneuver" onclick="goTo('maneuver')">
+    <span class="nav-icon">&#9654;</span>
+    <span class="nav-label">MANEUVERS</span>
+    <span class="nav-badge orange" id="nav-burn-badge">0</span>
+  </div>
+  <div class="nav-item" data-page="groundstation" onclick="goTo('groundstation')">
+    <span class="nav-icon">&#9711;</span>
+    <span class="nav-label">GROUND STATIONS</span>
+  </div>
+  <div class="nav-item" data-page="efficiency" onclick="goTo('efficiency')">
+    <span class="nav-icon">&#9651;</span>
+    <span class="nav-label">EFFICIENCY</span>
+  </div>
 
-<!-- ═══════════════ ALERT BANNER ═══════════════ -->
-<div id="alert-banner">⚠ CRITICAL CONJUNCTION WARNING — AUTONOMOUS EVASION ENGAGED</div>
-
-<!-- ═══════════════ GRID ═══════════════ -->
-<div class="grid">
-
-  <!-- PANEL 1: GROUND TRACK (Canvas-based, handles 10k+ debris) -->
-  <div class="panel">
-    <div class="panel-header">
-      <span class="panel-title">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="7" stroke="var(--amber)" stroke-width="1.5"/>
-          <path d="M1 8h14M8 2a9 5.5 0 0 1 0 12M8 2a9 5.5 0 0 0 0 12" stroke="var(--amber)" stroke-width=".8"/>
-        </svg>
-        GROUND TRACK — MERCATOR
-      </span>
-      <span class="panel-badge" id="map-count">0 objects</span>
+  <div class="sidebar-footer">
+    <div class="system-status" id="sys-status">
+      <span class="status-dot blink" style="background:var(--green)"></span>
+      <span class="sidebar-label">SYSTEM NOMINAL</span>
     </div>
-    <div class="panel-body" style="padding:0">
-      <!-- Canvas handles all rendering: map tiles are drawn, debris overlaid -->
-      <canvas id="ground-canvas"></canvas>
-      <div id="map-overlay-info">
-        <div class="map-info-chip">
-          TERMINATOR <span id="term-lon">---°</span>
+    <div style="font-size:9px;color:var(--dim);margin-top:4px;letter-spacing:1px" id="clock-display">--:--:-- UTC</div>
+  </div>
+</nav>
+
+<!-- ══ MAIN ══════════════════════════════════════════════════ -->
+<div class="main">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <span class="page-title" id="page-title">OVERVIEW</span>
+    <div class="stat-chip"><span class="chip-dot" style="background:var(--cyan)"></span><span id="tb-sats">0 SATS</span></div>
+    <div class="stat-chip"><span class="chip-dot" style="background:var(--red)"></span><span id="tb-deb">0 DEBRIS</span></div>
+    <div class="stat-chip"><span class="chip-dot" style="background:var(--orange)"></span><span id="tb-cdm">0 CDMs</span></div>
+    <div class="stat-chip"><span class="chip-dot" style="background:var(--green)"></span><span id="tb-uptime">UPTIME 0%</span></div>
+    <div class="stat-chip" style="margin-left:auto"><span class="chip-dot blink" id="live-dot" style="background:var(--orange)"></span><span id="tb-live">CONNECTING</span></div>
+    <div style="font-size:10px;color:var(--muted);letter-spacing:1px" id="tb-time">--:--:--</div>
+  </div>
+
+  <!-- ALERT BAR -->
+  <div class="alert-bar" id="alert-bar">
+    <span class="blink">&#9650;</span>
+    <span id="alert-text">CRITICAL CONJUNCTION WARNING — AUTONOMOUS EVASION ENGAGED</span>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- ── PAGE: OVERVIEW ─────────────────────────────────── -->
+    <div class="section active" id="page-overview">
+      <div class="ov-grid">
+        <div class="ov-card">
+          <div class="ov-label">ACTIVE SATELLITES</div>
+          <div class="ov-val" id="ov-sats" style="color:var(--cyan)">0</div>
+          <div class="ov-sub" id="ov-sats-sub">WAITING FOR TELEMETRY</div>
+          <div class="ov-accent" style="background:var(--cyan)"></div>
         </div>
-        <div class="map-info-chip">
-          GS CONTACTS <span id="gs-contact">---</span>
+        <div class="ov-card">
+          <div class="ov-label">TRACKED DEBRIS</div>
+          <div class="ov-val" id="ov-deb" style="color:var(--red)">0</div>
+          <div class="ov-sub" id="ov-deb-sub">OBJECTS IN LEO</div>
+          <div class="ov-accent" style="background:var(--red)"></div>
+        </div>
+        <div class="ov-card">
+          <div class="ov-label">ACTIVE CDMs</div>
+          <div class="ov-val" id="ov-cdm" style="color:var(--orange)">0</div>
+          <div class="ov-sub" id="ov-cdm-sub">24H LOOKAHEAD</div>
+          <div class="ov-accent" style="background:var(--orange)"></div>
+        </div>
+        <div class="ov-card">
+          <div class="ov-label">FLEET UPTIME</div>
+          <div class="ov-val" id="ov-uptime" style="color:var(--green)">--%</div>
+          <div class="ov-sub" id="ov-uptime-sub">IN NOMINAL SLOT</div>
+          <div class="ov-accent" style="background:var(--green)"></div>
+        </div>
+        <div class="ov-bottom">
+          <div class="ov-card" style="padding:10px 12px">
+            <div class="ov-label" style="margin-bottom:8px">SATELLITE STATUS SUMMARY</div>
+            <div id="ov-sat-list" style="font-size:10px;letter-spacing:.5px;line-height:1.9;color:var(--muted)">
+              No satellites tracked
+            </div>
+          </div>
+          <div class="ov-card" style="padding:10px 12px">
+            <div class="ov-label" style="margin-bottom:6px">SYSTEM NARRATIVE</div>
+            <div id="ov-narrative" class="nar-text" style="font-size:10px"></div>
+          </div>
         </div>
       </div>
-      <div id="map-legend">
-        <div class="leg"><div class="leg-dot" style="background:var(--cyan)"></div>SATELLITE</div>
-        <div class="leg"><div class="leg-dot" style="background:var(--amber)"></div>EVADING</div>
-        <div class="leg"><div class="leg-dot" style="background:var(--purple)"></div>RECOVERING</div>
-        <div class="leg"><div class="leg-dot" style="background:var(--red); opacity:.5"></div>DEBRIS (canvas)</div>
-        <div class="leg"><div class="leg-sq" style="background:rgba(180,180,255,.15)"></div>NIGHT ZONE</div>
-        <div class="leg"><div class="leg-dot" style="background:#666"></div>GRAVEYARD</div>
-      </div>
     </div>
-  </div>
 
-  <!-- PANEL 2: BULLSEYE (SVG, unchanged but styled) -->
-  <div class="panel">
-    <div class="panel-header">
-      <span class="panel-title">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="7" stroke="var(--red)" stroke-width="1.5"/>
-          <circle cx="8" cy="8" r="4" stroke="var(--orange)" stroke-width="1"/>
-          <circle cx="8" cy="8" r="1.5" fill="var(--red)"/>
-        </svg>
-        COLLISION RISK — BULLSEYE
-      </span>
-      <span class="panel-badge" id="cdm-count">ALL CLEAR</span>
-    </div>
-    <div class="panel-body" style="padding:6px">
-      <svg id="bullseye-svg" viewBox="0 0 340 380" style="width:100%;height:100%"></svg>
-    </div>
-  </div>
-
-  <!-- PANEL 3: FUEL HEATMAP -->
-  <div class="panel">
-    <div class="panel-header">
-      <span class="panel-title">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-          <rect x="5" y="2" width="6" height="10" rx="2" stroke="var(--amber)" stroke-width="1.5"/>
-          <rect x="6.5" y="4" width="3" height="5" rx=".5" fill="var(--amber)" opacity=".6"/>
-        </svg>
-        PROPELLANT BUDGET
-      </span>
-      <span class="panel-badge" id="fuel-count">0 SATELLITES</span>
-    </div>
-    <div class="panel-body" style="padding:0">
-      <div id="fuel-grid"><div class="no-data">AWAITING TELEMETRY…</div></div>
-    </div>
-  </div>
-
-  <!-- PANEL 4: ΔV EFFICIENCY CHART -->
-  <div class="panel">
-    <div class="panel-header">
-      <span class="panel-title">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-          <polyline points="2,12 6,7 10,9 14,3" stroke="var(--cyan)" stroke-width="1.5" fill="none"/>
-          <circle cx="6" cy="7" r="1.5" fill="var(--cyan)"/>
-          <circle cx="10" cy="9" r="1.5" fill="var(--orange)"/>
-          <circle cx="14" cy="3" r="1.5" fill="var(--green)"/>
-        </svg>
-        ΔV COST vs COLLISIONS AVOIDED
-      </span>
-      <span class="panel-badge" id="dv-label">EFFICIENCY ANALYSIS</span>
-    </div>
-    <div class="panel-body" style="padding:0">
-      <canvas id="dv-canvas"></canvas>
-    </div>
-  </div>
-
-  <!-- PANEL 5: GANTT TIMELINE (full width) -->
-  <div class="panel panel-full">
-    <div class="panel-header">
-      <span class="panel-title">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-          <line x1="2" y1="8" x2="14" y2="8" stroke="var(--muted)" stroke-width="1.2"/>
-          <rect x="3" y="5" width="4" height="6" rx="1" fill="var(--amber)"/>
-          <rect x="9" y="4" width="4" height="8" rx="1" fill="var(--cyan)" opacity=".8"/>
-        </svg>
-        MANEUVER GANTT SCHEDULE
-      </span>
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="display:flex;align-items:center;gap:12px;font-size:8px;font-family:var(--font-mono);color:var(--muted)">
-          <span><span style="display:inline-block;width:8px;height:8px;background:var(--amber);border-radius:1px;margin-right:4px"></span>EVASION BURN</span>
-          <span><span style="display:inline-block;width:8px;height:8px;background:var(--green);border-radius:1px;margin-right:4px"></span>RECOVERY BURN</span>
-          <span><span style="display:inline-block;width:8px;height:8px;background:var(--purple);border-radius:1px;margin-right:4px"></span>GRAVEYARD BURN</span>
-          <span><span style="display:inline-block;width:8px;height:8px;background:var(--border2);border-radius:1px;margin-right:4px"></span>COOLDOWN</span>
+    <!-- ── PAGE: GROUND TRACK ─────────────────────────────── -->
+    <div class="section" id="page-groundtrack">
+      <div class="split split-h" style="flex:1;overflow:hidden">
+        <div class="panel">
+          <div class="panel-hdr">
+            <span class="panel-title">GROUND TRACK — MERCATOR PROJECTION</span>
+            <span class="panel-badge" id="gt-badge">0 OBJECTS</span>
+          </div>
+          <div class="panel-body" style="position:relative">
+            <div id="map"></div>
+            <div class="map-legend">
+              <div class="leg-row"><div class="leg-dot" style="background:var(--cyan)"></div>SATELLITE</div>
+              <div class="leg-row"><div class="leg-dot" style="background:var(--orange)"></div>EVADING</div>
+              <div class="leg-row"><div class="leg-dot" style="background:var(--purple)"></div>RECOVERING</div>
+              <div class="leg-row"><div class="leg-dot" style="background:var(--red)"></div>DEBRIS</div>
+              <div class="leg-row"><div class="leg-dot" style="background:var(--yellow)"></div>EOL / GRAVEYARD</div>
+            </div>
+            <div class="map-info" id="map-info">
+              <div class="mi-row"><span>OBJECTS</span><span class="mi-val" id="mi-obj">0</span></div>
+              <div class="mi-row"><span>THREATS</span><span class="mi-val" id="mi-thr">0</span></div>
+              <div class="mi-row"><span>SIM TIME</span><span class="mi-val" id="mi-time">--:--</span></div>
+            </div>
+            <canvas id="trail-canvas" style="position:absolute;inset:0;pointer-events:none;z-index:400"></canvas>
+          </div>
         </div>
-        <span class="panel-badge" id="burn-count">0 BURNS</span>
+        <div class="panel" style="border-left:0">
+          <div class="panel-hdr"><span class="panel-title">LIVE SITUATION REPORT</span></div>
+          <div class="panel-body pad" style="overflow-y:auto">
+            <div id="gt-sitrep" style="font-size:10px;line-height:2;letter-spacing:.5px;color:var(--muted)">
+              Awaiting telemetry…
+            </div>
+          </div>
+          <div class="narration">
+            <div class="nar-label">GROUND TRACK ANALYSIS</div>
+            <div class="nar-text" id="gt-narration">System initializing. Waiting for first telemetry batch.</div>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="panel-body" style="padding:0">
-      <div id="timeline-wrap" style="overflow-x:auto;height:100%;padding:10px 14px">
-        <canvas id="timeline-canvas"></canvas>
-      </div>
-    </div>
-  </div>
 
-</div><!-- /grid -->
+    <!-- ── PAGE: COLLISION RISK ───────────────────────────── -->
+    <div class="section" id="page-collision">
+      <div class="split split-h" style="flex:1;overflow:hidden">
+        <div class="panel">
+          <div class="panel-hdr">
+            <span class="panel-title">CONJUNCTION BULLSEYE — RELATIVE APPROACH</span>
+            <span class="panel-badge" id="col-badge">NO THREATS</span>
+          </div>
+          <div class="panel-body" style="display:flex;align-items:center;justify-content:center;padding:16px">
+            <svg id="bullseye-svg" viewBox="0 0 400 400" style="width:100%;max-width:400px;max-height:100%"></svg>
+          </div>
+          <div class="narration">
+            <div class="nar-label">CONJUNCTION ANALYSIS</div>
+            <div class="nar-text" id="col-narration">Scanning orbital paths for conjunctions…</div>
+          </div>
+        </div>
+        <div class="panel" style="border-left:0;display:flex;flex-direction:column">
+          <div class="panel-hdr"><span class="panel-title">CDM EVENT LOG</span></div>
+          <div class="panel-body" style="overflow-y:auto">
+            <table class="cdm-table">
+              <thead><tr>
+                <th>SATELLITE</th><th>DEBRIS</th><th>MISS DIST</th><th>TCA</th><th>RISK</th>
+              </tr></thead>
+              <tbody id="cdm-tbody"><tr><td colspan="5" style="text-align:center;color:var(--dim);padding:20px;letter-spacing:1px">NO ACTIVE CDMs</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PAGE: PROPELLANT ───────────────────────────────── -->
+    <div class="section" id="page-fuel">
+      <div class="panel" style="flex:1;overflow:hidden">
+        <div class="panel-hdr">
+          <span class="panel-title">PROPELLANT BUDGET — FLEET STATUS</span>
+          <span class="panel-badge" id="fuel-badge">0 SATELLITES</span>
+        </div>
+        <div class="panel-body" style="overflow:hidden">
+          <div class="fuel-grid" id="fuel-grid">
+            <div class="empty">AWAITING SATELLITE TELEMETRY</div>
+          </div>
+        </div>
+        <div class="narration">
+          <div class="nar-label">PROPELLANT STATUS REPORT</div>
+          <div class="nar-text" id="fuel-narration">Fleet propellant status is being evaluated…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PAGE: MANEUVERS ────────────────────────────────── -->
+    <div class="section" id="page-maneuver">
+      <div class="panel" style="flex:1;overflow:hidden">
+        <div class="panel-hdr">
+          <span class="panel-title">MANEUVER GANTT — BURN SCHEDULE</span>
+          <span class="panel-badge" id="man-badge">0 BURNS</span>
+        </div>
+        <div class="panel-body" style="padding:10px">
+          <div id="tl-wrap"><div class="empty">NO MANEUVERS SCHEDULED</div></div>
+        </div>
+        <div class="narration">
+          <div class="nar-label">MANEUVER EXECUTION REPORT</div>
+          <div class="nar-text" id="man-narration">No burns scheduled. All satellites nominal.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PAGE: GROUND STATIONS ─────────────────────────── -->
+    <div class="section" id="page-groundstation">
+      <div class="panel" style="flex:1;overflow:hidden">
+        <div class="panel-hdr"><span class="panel-title">GROUND STATION NETWORK — LOS STATUS</span></div>
+        <div class="panel-body" style="overflow-y:auto">
+          <div class="gs-grid" id="gs-grid">
+            <div class="empty">COMPUTING LOS WINDOWS…</div>
+          </div>
+        </div>
+        <div class="narration">
+          <div class="nar-label">COMMUNICATIONS ANALYSIS</div>
+          <div class="nar-text" id="gs-narration">Evaluating ground station contact windows…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PAGE: EFFICIENCY ───────────────────────────────── -->
+    <div class="section" id="page-efficiency">
+      <div class="split" style="grid-template-columns:1fr 1fr;flex:1">
+        <div class="panel">
+          <div class="panel-hdr"><span class="panel-title">ΔV COST vs COLLISIONS AVOIDED</span></div>
+          <div class="panel-body" style="padding:12px">
+            <canvas id="eff-chart"></canvas>
+          </div>
+        </div>
+        <div class="panel" style="border-left:0">
+          <div class="panel-hdr"><span class="panel-title">FUEL CONSUMPTION OVER TIME</span></div>
+          <div class="panel-body" style="padding:12px">
+            <canvas id="fuel-chart"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="narration" style="border-top:1px solid var(--border)">
+        <div class="nar-label">EFFICIENCY ANALYSIS</div>
+        <div class="nar-text" id="eff-narration">Analyzing mission efficiency metrics…</div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app -->
 
 <script>
-/* ═══════════════════════════════════════════════════════════════════
-   ACM DASHBOARD — FULL CANVAS ENGINE
-   ─ Ground Track: pure Canvas (handles 10,000+ debris at 60fps)
-   ─ Bullseye:     SVG (D3-style manual draw)
-   ─ Fuel:         DOM cards
-   ─ ΔV Chart:     Canvas line graph
-   ─ Gantt:        Canvas
-   ═══════════════════════════════════════════════════════════════════ */
 const API = '/api';
-const tooltip = document.getElementById('tooltip');
+const GS_STATIONS = [
+  {id:'GS-001',name:'ISTRAC BENGALURU',lat:13.03,lon:77.52,min_el:5},
+  {id:'GS-002',name:'SVALBARD',lat:78.23,lon:15.41,min_el:5},
+  {id:'GS-003',name:'GOLDSTONE',lat:35.43,lon:-116.89,min_el:10},
+  {id:'GS-004',name:'PUNTA ARENAS',lat:-53.15,lon:-70.92,min_el:5},
+  {id:'GS-005',name:'IIT DELHI',lat:28.55,lon:77.19,min_el:15},
+  {id:'GS-006',name:'McMURDO',lat:-77.85,lon:166.67,min_el:5},
+];
 
-// ── State ──────────────────────────────────────────────────────────
-let state = {
-  sats: [], debris: [], cdms: [], burns: [], execBurns: [],
-  simTime: null, totalDV: 0, collisionsAvoided: 0,
-  dvHistory: [],          // [{time, dv, collAvoided}]
-  graveyardSats: new Set() // satellite IDs in graveyard orbit
-};
+// ── STATE ────────────────────────────────────────────────────
+let state = {sats:[],debs:[],cdms:[],burns:[],snap:null,cdmData:null,ganttData:null};
+let dvHistory = [], fuelHistory = [], collisionAvoidedCount = 0;
+let map, satLayer, debLayer, gsLayer, trailCanvas, trailCtx;
+const trailHistory = {};
+const TRAIL_MAX = 90;
+let effChart = null, fuelChart = null;
+let currentPage = 'overview';
 
-const trailHistory = {}; // satId -> [{lat,lon}]
-const TRAIL_MAX = 90;    // ~90 minutes of trail points
-
-// ── RAF loop ───────────────────────────────────────────────────────
-let rafId = null;
-function startRenderLoop() {
-  function loop() {
-    drawGroundTrack();
-    rafId = requestAnimationFrame(loop);
-  }
-  loop();
-}
-
-// ── API polling (every 2s) ─────────────────────────────────────────
+// ── INIT ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  resizeAllCanvases();
-  window.addEventListener('resize', resizeAllCanvases);
-  startRenderLoop();
-  poll();
-  setInterval(poll, 2000);
+  initMap();
+  initCharts();
+  renderGS();
+  tick();
+  setInterval(tick, 1000);
+  setInterval(() => {
+    document.getElementById('clock-display').textContent =
+      new Date().toISOString().slice(11,19) + ' UTC';
+  }, 1000);
 });
 
-async function poll() {
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+  setTimeout(() => { if(map) map.invalidateSize(); }, 320);
+}
+
+function goTo(page) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelector(`[data-page="${page}"]`).classList.add('active');
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  document.getElementById('page-title').textContent = page.toUpperCase().replace('groundtrack','GROUND TRACK').replace('groundstation','GROUND STATIONS');
+  currentPage = page;
+  if (page === 'groundtrack' && map) setTimeout(() => map.invalidateSize(), 50);
+  if (state.snap) renderPage(page);
+}
+
+// ── TICK ──────────────────────────────────────────────────────
+async function tick() {
   try {
     const [snap, cdm, gantt] = await Promise.all([
       fetch(`${API}/visualization/snapshot`).then(r=>r.json()).catch(()=>null),
       fetch(`${API}/cdm/bullseye`).then(r=>r.json()).catch(()=>null),
       fetch(`${API}/visualization/maneuver-gantt`).then(r=>r.json()).catch(()=>null),
     ]);
-
-    if (!snap) { setConn(false); return; }
-    setConn(true);
-
-    // Parse snapshot
-    state.sats   = snap.satellites   || [];
-    state.debris = snap.debris_cloud || [];
-    state.simTime = snap.timestamp ? new Date(snap.timestamp) : null;
-
-    // CDM points from bullseye endpoint
+    if (!snap) { setLive(false); return; }
+    setLive(true);
+    state.snap = snap;
+    state.cdmData = cdm;
+    state.ganttData = gantt;
+    state.sats = snap.satellites || [];
+    state.debs = snap.debris_cloud || [];
     state.cdms = cdm && cdm.points ? cdm.points : [];
-
-    // Burns from gantt
     state.burns = gantt && gantt.burns ? gantt.burns : [];
 
-    // Compute total DV from burns
-    const totalBurnDV = state.burns.reduce((s,b)=>{
-      const dv = b.delta_v_mag_km_s || 0;
-      return s + dv * 1000;
-    }, 0);
-    state.totalDV = totalBurnDV;
+    // Track history for efficiency charts
+    const totalFuel = state.sats.reduce((a,s)=>a+s.fuel_kg,0);
+    const now = new Date(snap.timestamp);
+    fuelHistory.push({t:now, v:totalFuel});
+    if (fuelHistory.length > 60) fuelHistory.shift();
 
-    // Graveyard detection (EOL sats)
-    state.sats.forEach(s => {
-      if (s.status === 'EOL' || s.status === 'GRAVEYARD') {
-        state.graveyardSats.add(s.id);
-      }
+    updateTopBar();
+    renderPage(currentPage);
+    updateAlertBar();
+    updateNavBadges();
+  } catch(e) { setLive(false); }
+}
+
+function setLive(ok) {
+  document.getElementById('tb-live').textContent = ok ? 'LIVE' : 'OFFLINE';
+  document.getElementById('live-dot').style.background = ok ? 'var(--green)' : 'var(--red)';
+}
+
+function updateTopBar() {
+  const {sats, debs, cdms, snap} = state;
+  document.getElementById('tb-sats').textContent = `${sats.length} SATS`;
+  document.getElementById('tb-deb').textContent = `${debs.length} DEBRIS`;
+  document.getElementById('tb-cdm').textContent = `${cdms.length} CDMs`;
+  const nomPct = sats.length ? Math.round(sats.filter(s=>s.status==='NOMINAL').length/sats.length*100) : 0;
+  document.getElementById('tb-uptime').textContent = `UPTIME ${nomPct}%`;
+  if (snap) document.getElementById('tb-time').textContent = new Date(snap.timestamp).toLocaleTimeString();
+}
+
+function updateAlertBar() {
+  const bar = document.getElementById('alert-bar');
+  const crit = state.cdms.filter(c=>c.miss_dist_km < 0.1);
+  if (crit.length > 0) {
+    bar.classList.add('show');
+    document.getElementById('alert-text').textContent =
+      `CRITICAL CONJUNCTION WARNING — ${crit.length} THREAT(S) WITHIN 100m — AUTONOMOUS EVASION ENGAGED`;
+  } else { bar.classList.remove('show'); }
+}
+
+function updateNavBadges() {
+  document.getElementById('nav-cdm-badge').textContent = state.cdms.length;
+  document.getElementById('nav-cdm-badge').className = `nav-badge ${state.cdms.filter(c=>c.miss_dist_km<0.1).length>0?'':'orange'}`;
+  document.getElementById('nav-burn-badge').textContent = state.burns.length;
+}
+
+// ── RENDER PAGES ──────────────────────────────────────────────
+function renderPage(page) {
+  if (page === 'overview')      renderOverview();
+  if (page === 'groundtrack')   renderGroundTrack();
+  if (page === 'collision')     renderCollision();
+  if (page === 'fuel')          renderFuel();
+  if (page === 'maneuver')      renderManeuver();
+  if (page === 'groundstation') renderGroundStation();
+  if (page === 'efficiency')    renderEfficiency();
+}
+
+// ── OVERVIEW ──────────────────────────────────────────────────
+function renderOverview() {
+  const {sats,debs,cdms} = state;
+  document.getElementById('ov-sats').textContent = sats.length;
+  document.getElementById('ov-deb').textContent = debs.length;
+  document.getElementById('ov-cdm').textContent = cdms.length;
+  const nom = sats.filter(s=>s.status==='NOMINAL').length;
+  const pct = sats.length ? Math.round(nom/sats.length*100) : 0;
+  document.getElementById('ov-uptime').textContent = `${pct}%`;
+  document.getElementById('ov-sats-sub').textContent = `${sats.filter(s=>s.status==='EVADING').length} EVADING · ${sats.filter(s=>s.status==='RECOVERING').length} RECOVERING`;
+  document.getElementById('ov-cdm-sub').textContent = `${cdms.filter(c=>c.miss_dist_km<0.1).length} CRITICAL · ${cdms.filter(c=>c.miss_dist_km<1&&c.miss_dist_km>=0.1).length} HIGH`;
+
+  const satList = document.getElementById('ov-sat-list');
+  if (sats.length === 0) { satList.innerHTML = 'No satellites tracked'; return; }
+  satList.innerHTML = sats.map(s => {
+    const col = s.status==='NOMINAL'?'var(--green)':s.status==='EVADING'?'var(--orange)':s.status==='RECOVERING'?'var(--purple)':'var(--red)';
+    const pct = Math.round(s.fuel_kg/50*100);
+    return `<span style="color:var(--cyan)">${s.id}</span> &nbsp;·&nbsp; <span style="color:${col}">${s.status}</span> &nbsp;·&nbsp; FUEL <span style="color:var(--text)">${pct}%</span>`;
+  }).join('<br>');
+
+  // Narrative
+  const crit = cdms.filter(c=>c.miss_dist_km<0.1);
+  const minFuel = sats.length ? Math.min(...sats.map(s=>s.fuel_kg)) : 50;
+  let narr = '';
+  if (sats.length === 0) { narr = 'System online. Awaiting first telemetry batch from constellation.'; }
+  else {
+    narr = `Fleet of <span>${sats.length} satellite(s)</span> actively tracked. `;
+    if (crit.length > 0) narr += `<span class="danger">${crit.length} CRITICAL conjunction(s)</span> detected — autonomous evasion burns have been scheduled. `;
+    else if (cdms.length > 0) narr += `<span class="warn">${cdms.length} conjunction warning(s)</span> active in 24h lookahead window. `;
+    else narr += `<span class="good">No collision threats</span> detected in next 24 hours. `;
+    narr += `Fleet uptime at <span>${pct}%</span>. `;
+    if (minFuel < 5) narr += `<span class="danger">EOL alert:</span> one or more satellites below 5% fuel — graveyard orbit burn imminent. `;
+    else narr += `Lowest fuel reserve: <span>${minFuel.toFixed(1)} kg</span> remaining.`;
+  }
+  document.getElementById('ov-narrative').innerHTML = narr;
+}
+
+// ── GROUND TRACK ──────────────────────────────────────────────
+function initMap() {
+  map = L.map('map',{zoomControl:true,attributionControl:true}).setView([20,0],2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom:19
+  }).addTo(map);
+  satLayer = L.layerGroup().addTo(map);
+  debLayer = L.layerGroup().addTo(map);
+  gsLayer  = L.layerGroup().addTo(map);
+  trailCanvas = document.getElementById('trail-canvas');
+  trailCtx = trailCanvas.getContext('2d');
+  map.on('move zoom', drawTrails);
+  // Add GS markers
+  GS_STATIONS.forEach(gs => {
+    L.circleMarker([gs.lat,gs.lon],{radius:5,fillColor:'#FFD600',color:'#000',weight:1,fillOpacity:.7})
+      .bindTooltip(`${gs.name}<br>Min El: ${gs.min_el}°`,{direction:'top'}).addTo(gsLayer);
+  });
+}
+
+function statusColor(s) {
+  const m = {NOMINAL:'#00E5FF',EVADING:'#FF9500',RECOVERING:'#AA77FF',EOL:'#FF3D57',OFFLINE:'#444'};
+  return m[s]||'#00E5FF';
+}
+
+function renderGroundTrack() {
+  const {sats,debs,cdms} = state;
+  satLayer.clearLayers(); debLayer.clearLayers();
+
+  sats.forEach(sat => {
+    if(sat.lat===undefined) return;
+    if(!trailHistory[sat.id]) trailHistory[sat.id]=[];
+    trailHistory[sat.id].push([sat.lat,sat.lon]);
+    if(trailHistory[sat.id].length>TRAIL_MAX) trailHistory[sat.id].shift();
+    const col = statusColor(sat.status);
+    const pct = Math.round(sat.fuel_kg/50*100);
+    L.circleMarker([sat.lat,sat.lon],{radius:8,fillColor:col,color:'#000',weight:1.5,fillOpacity:.95})
+      .bindPopup(`<div style="font-family:monospace;font-size:11px;background:#FFFFFF;color:#222222;padding:8px;min-width:180px">
+        <b style="color:#0088FF">${sat.id}</b><br>
+        STATUS: <span style="color:${col}">${sat.status}</span><br>
+        FUEL: ${sat.fuel_kg.toFixed(1)} kg &nbsp;(${pct}%)<br>
+        LAT: ${sat.lat.toFixed(4)}° &nbsp;LON: ${sat.lon.toFixed(4)}°
+      </div>`,{className:'dark-popup'}).addTo(satLayer);
+  });
+
+  debs.forEach(d => {
+    if(d[1]===undefined) return;
+    L.circleMarker([d[1],d[2]],{radius:2.5,fillColor:'#FF3D57',color:'#FF3D57',weight:0,fillOpacity:.7})
+      .bindTooltip(`${d[0]} | ${d[3]}km`,{direction:'top'}).addTo(debLayer);
+  });
+
+  const mapEl = document.getElementById('map');
+  trailCanvas.width = mapEl.offsetWidth; trailCanvas.height = mapEl.offsetHeight;
+  drawTrails();
+
+  document.getElementById('gt-badge').textContent = `${sats.length+debs.length} OBJECTS`;
+  document.getElementById('mi-obj').textContent = sats.length+debs.length;
+  document.getElementById('mi-thr').textContent = cdms.length;
+  if(state.snap) document.getElementById('mi-time').textContent = new Date(state.snap.timestamp).toLocaleTimeString();
+
+  // Sitrep
+  const sitrep = document.getElementById('gt-sitrep');
+  if(sats.length===0){sitrep.innerHTML='<span style="color:var(--dim)">NO ACTIVE SATELLITES</span>';return;}
+  sitrep.innerHTML = sats.map(s=>{
+    const col=statusColor(s.status);
+    const pct=Math.round(s.fuel_kg/50*100);
+    const threat=cdms.filter(c=>c.satellite_id===s.id);
+    return `<div style="margin-bottom:10px;padding:8px;background:var(--bg3);border-left:2px solid ${col}">
+      <span style="color:${col};font-weight:700;letter-spacing:1px">${s.id}</span><br>
+      STATUS: <span style="color:${col}">${s.status}</span> &nbsp;|&nbsp; FUEL: <span style="color:var(--text)">${pct}% (${s.fuel_kg.toFixed(1)}kg)</span><br>
+      POSITION: ${s.lat.toFixed(3)}°N ${s.lon.toFixed(3)}°E<br>
+      ${threat.length>0?`<span style="color:var(--red)">⚠ ${threat.length} THREAT(S) — CLOSEST: ${threat[0].miss_dist_km.toFixed(3)}km</span>`:'<span style="color:var(--green)">✓ NO THREATS</span>'}
+    </div>`;
+  }).join('');
+
+  // Narration
+  const nom = sats.filter(s=>s.status==='NOMINAL').length;
+  const ev  = sats.filter(s=>s.status==='EVADING').length;
+  const rec = sats.filter(s=>s.status==='RECOVERING').length;
+  let n = `Currently tracking <span>${sats.length} satellite(s)</span> and <span>${debs.length} debris object(s)</span> over Earth. `;
+  if(ev>0) n+=`<span class="danger">${ev} satellite(s) are actively evading</span> — retrograde burn in progress. `;
+  if(rec>0) n+=`<span class="warn">${rec} satellite(s) recovering</span> — return-to-slot burn scheduled. `;
+  if(nom===sats.length) n+=`<span class="good">All satellites in nominal orbital slots.</span>`;
+  document.getElementById('gt-narration').innerHTML=n;
+}
+
+function drawTrails() {
+  if(!trailCtx||!map) return;
+  const c=trailCanvas; c.width=c.offsetWidth; c.height=c.offsetHeight;
+  trailCtx.clearRect(0,0,c.width,c.height);
+  Object.entries(trailHistory).forEach(([id,pts])=>{
+    if(pts.length<2) return;
+    trailCtx.beginPath();
+    trailCtx.strokeStyle='rgba(0,229,255,0.3)';
+    trailCtx.lineWidth=1.5;
+    trailCtx.setLineDash([3,5]);
+    pts.forEach((pt,i)=>{
+      try{const px=map.latLngToContainerPoint(L.latLng(pt[0],pt[1]));
+        i===0?trailCtx.moveTo(px.x,px.y):trailCtx.lineTo(px.x,px.y);}catch(e){}
     });
-
-    // Track DV history for chart
-    if (state.simTime) {
-      state.dvHistory.push({
-        time: state.simTime,
-        dv: state.totalDV,
-        collAvoided: state.collisionsAvoided
-      });
-      if (state.dvHistory.length > 60) state.dvHistory.shift();
-    }
-
-    // Update trail history
-    state.sats.forEach(sat => {
-      if (!trailHistory[sat.id]) trailHistory[sat.id] = [];
-      trailHistory[sat.id].push({ lat: sat.lat, lon: sat.lon });
-      if (trailHistory[sat.id].length > TRAIL_MAX) trailHistory[sat.id].shift();
-    });
-
-    updateHeader();
-    updateBullseye();
-    updateFuel();
-    updateDVChart();
-    updateTimeline();
-    updateAlertBanner();
-
-  } catch(e) {
-    setConn(false);
-    console.error('Poll error:', e);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// CANVAS RESIZE
-// ═══════════════════════════════════════════════════════════════════
-function resizeAllCanvases() {
-  for (const id of ['ground-canvas','dv-canvas','timeline-canvas']) {
-    const c = document.getElementById(id);
-    if (!c) continue;
-    const p = c.parentElement;
-    const r = p.getBoundingClientRect();
-    c.width  = Math.floor(r.width)  || c.offsetWidth  || 600;
-    c.height = Math.floor(r.height) || c.offsetHeight || 300;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// HEADER
-// ═══════════════════════════════════════════════════════════════════
-function updateHeader() {
-  const nominalCount = state.sats.filter(s=>s.status==='NOMINAL').length;
-  const totalSats = state.sats.length;
-  const uptime = totalSats > 0 ? Math.round((nominalCount/totalSats)*100) : 0;
-
-  document.getElementById('hdr-sats').textContent    = totalSats;
-  document.getElementById('hdr-debris').textContent  = state.debris.length;
-  document.getElementById('hdr-cdm').textContent     = state.cdms.length;
-  document.getElementById('hdr-uptime').textContent  = `${uptime}%`;
-  document.getElementById('hdr-dv').textContent      = `${state.totalDV.toFixed(2)} m/s`;
-  document.getElementById('map-count').textContent   = `${totalSats + state.debris.length} OBJECTS`;
-  document.getElementById('fuel-count').textContent  = `${totalSats} SATELLITES`;
-
-  if (state.simTime) {
-    document.getElementById('sim-time').textContent =
-      state.simTime.toISOString().replace('T',' ').slice(0,19) + ' UTC';
-  }
-}
-
-function setConn(ok) {
-  const dot  = document.getElementById('conn-dot');
-  const text = document.getElementById('conn-text');
-  dot.className  = `dot ${ok ? 'dot-green pulse' : 'dot-red'}`;
-  text.textContent = ok ? 'LIVE' : 'DISCONNECTED';
-}
-
-function updateAlertBanner() {
-  const banner = document.getElementById('alert-banner');
-  const critical = state.cdms.filter(c => (c.miss_dist_km||c.miss_distance_km||99) < 0.1);
-  banner.style.display = critical.length > 0 ? 'block' : 'none';
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// PANEL 1: GROUND TRACK — pure Canvas
-//
-// HOW IT WORKS:
-// 1. Project lat/lon → pixel using Mercator formula
-// 2. Draw a dark blue world map silhouette using path data
-// 3. Draw TERMINATOR LINE: compute subsolar point from current UTC
-//    time, shade the night side with a semi-transparent overlay
-// 4. Draw DEBRIS: batch all 10k+ dots in a single drawImage call
-//    using an offscreen canvas (only re-renders when data changes)
-// 5. Draw SATELLITE TRAILS: canvas polylines
-// 6. Draw SATELLITE MARKERS: colored circles
-// 7. Draw GROUND STATIONS: diamond markers
-// 8. Draw GRAVEYARD ORBIT ring: lower altitude ring in purple
-// ═══════════════════════════════════════════════════════════════════
-const GS_POSITIONS = [
-  {id:'GS-001', lat:13.0333, lon:77.5167,  name:'ISTRAC'},
-  {id:'GS-002', lat:78.2297, lon:15.4077,  name:'Svalbard'},
-  {id:'GS-003', lat:35.4266, lon:-116.89,  name:'Goldstone'},
-  {id:'GS-004', lat:-53.15,  lon:-70.9167, name:'Punta Arenas'},
-  {id:'GS-005', lat:28.545,  lon:77.1926,  name:'IIT Delhi'},
-  {id:'GS-006', lat:-77.846, lon:166.668,  name:'McMurdo'},
-];
-
-// Offscreen canvas for debris batch (rebuilt only when debris changes)
-let debrisCanvas = null;
-let lastDebrisCount = -1;
-
-function mercatorX(lon, W) {
-  return ((lon + 180) / 360) * W;
-}
-function mercatorY(lat, H) {
-  const latR  = (lat * Math.PI) / 180;
-  const sinL  = Math.sin(latR);
-  const y     = (0.5 - (0.25 * Math.log((1+sinL)/(1-sinL))) / Math.PI) * H;
-  return Math.min(Math.max(y, 0), H);
-}
-
-function subSolarPoint() {
-  // Compute approximate sub-solar lat/lon from current UTC
-  const now   = new Date();
-  const doy   = Math.floor((now - new Date(now.getFullYear(),0,0)) / 86400000);
-  const decl  = -23.45 * Math.cos((2*Math.PI/365)*(doy+10));
-  const utcH  = now.getUTCHours() + now.getUTCMinutes()/60 + now.getUTCSeconds()/3600;
-  const lon   = ((utcH - 12) / 24) * -360;
-  return { lat: decl, lon: ((lon % 360) + 540) % 360 - 180 };
-}
-
-function drawGroundTrack() {
-  const c   = document.getElementById('ground-canvas');
-  if (!c) return;
-  const ctx = c.getContext('2d');
-  const W   = c.width, H = c.height;
-  if (W < 10 || H < 10) return;
-
-  // Clear
-  ctx.fillStyle = '#f6f8fa';
-  ctx.fillRect(0, 0, W, H);
-
-  // ── Draw world map using CSS background trick ──
-  // We use a simple rectangular coastline approximation with canvas arcs
-  drawWorldOutline(ctx, W, H);
-
-  // ── TERMINATOR (day/night line) ──
-  drawTerminator(ctx, W, H);
-
-  // ── GRID LINES ──
-  ctx.strokeStyle = 'rgba(0,0,0,0.04)';
-  ctx.lineWidth   = 0.5;
-  for (let lat = -60; lat <= 60; lat += 30) {
-    const y = mercatorY(lat, H);
-    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
-  }
-  for (let lon = -150; lon <= 180; lon += 60) {
-    const x = mercatorX(lon, W);
-    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
-  }
-
-  // ── DEBRIS (offscreen batch) ──
-  if (state.debris.length !== lastDebrisCount) {
-    rebuildDebrisCanvas(W, H);
-    lastDebrisCount = state.debris.length;
-  }
-  if (debrisCanvas) ctx.drawImage(debrisCanvas, 0, 0);
-
-  // ── ORBITAL TRAILS ──
-  Object.entries(trailHistory).forEach(([id, pts]) => {
-    if (pts.length < 2) return;
-    const sat = state.sats.find(s=>s.id===id);
-    const isGrave = state.graveyardSats.has(id);
-    const col = isGrave ? 'rgba(120,80,200,0.25)' : 'rgba(57,208,216,0.18)';
-    ctx.strokeStyle = col;
-    ctx.lineWidth   = 1;
-    ctx.setLineDash([3, 5]);
-    ctx.beginPath();
-    pts.forEach((pt, i) => {
-      const x = mercatorX(pt.lon, W);
-      const y = mercatorY(pt.lat, H);
-      i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
-  });
-
-  // ── GROUND STATIONS ──
-  GS_POSITIONS.forEach(gs => {
-    const x = mercatorX(gs.lon, W);
-    const y = mercatorY(gs.lat, H);
-    // Diamond shape
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.strokeStyle = 'rgba(230,168,23,0.7)';
-    ctx.fillStyle   = 'rgba(230,168,23,0.15)';
-    ctx.lineWidth   = 1;
-    ctx.beginPath();
-    ctx.moveTo(0,-6); ctx.lineTo(5,0); ctx.lineTo(0,6); ctx.lineTo(-5,0);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    // Radius ring (LOS footprint ~2000km ≈ ~18°)
-    ctx.strokeStyle = 'rgba(230,168,23,0.1)';
-    ctx.lineWidth = 0.7;
-    ctx.setLineDash([2,4]);
-    const footprintPx = (18/180)*H;
-    ctx.beginPath(); ctx.arc(0,0,footprintPx,0,Math.PI*2);
-    ctx.stroke(); ctx.setLineDash([]);
-    ctx.restore();
-    // Label
-    ctx.font = '7px Space Mono, monospace';
-    ctx.fillStyle = 'rgba(230,168,23,0.5)';
-    ctx.fillText(gs.id, x+7, y+3);
-  });
-
-  // ── GRAVEYARD ORBIT RING ──
-  // Graveyard orbit for LEO: ~200km altitude → lower ring
-  // We draw a thin dashed ellipse across the map to indicate the graveyard belt
-  if (state.graveyardSats.size > 0) {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(188,140,255,0.3)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([6,4]);
-    // Draw as a horizontal band at low latitudes (simplified graveyard zone)
-    const yTop = mercatorY(25, H);
-    const yBot = mercatorY(-25, H);
-    ctx.strokeRect(0, yTop, W, yBot - yTop);
-    ctx.setLineDash([]);
-    ctx.font = '8px Space Mono,monospace';
-    ctx.fillStyle = 'rgba(188,140,255,0.5)';
-    ctx.fillText('GRAVEYARD ORBIT BAND', 8, yTop - 4);
-    ctx.restore();
-  }
-
-  // ── SATELLITES ──
-  state.sats.forEach(sat => {
-    const x   = mercatorX(sat.lon, W);
-    const y   = mercatorY(sat.lat, H);
-    const col = satColor(sat.status);
-    const r   = 5;
-
-    // Pulse ring for EVADING
-    if (sat.status === 'EVADING') {
-      const phase = (Date.now() % 1200) / 1200;
-      const pr    = r + 4 + phase * 8;
-      ctx.beginPath();
-      ctx.arc(x, y, pr, 0, Math.PI*2);
-      ctx.strokeStyle = `rgba(230,168,23,${0.5*(1-phase)})`;
-      ctx.lineWidth   = 1;
-      ctx.stroke();
-    }
-
-    // Satellite circle
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI*2);
-    ctx.fillStyle = col;
-    ctx.shadowColor  = col;
-    ctx.shadowBlur   = 8;
-    ctx.fill();
-    ctx.shadowBlur   = 0;
-
-    // Outline
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-    ctx.lineWidth   = 0.8;
-    ctx.stroke();
-
-    // Label
-    ctx.font      = '8px Space Mono, monospace';
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillText(sat.id.slice(-6), x+7, y+3);
+    trailCtx.stroke(); trailCtx.setLineDash([]);
   });
 }
 
-function satColor(status) {
-  switch((status||'').toUpperCase()) {
-    case 'EVADING':    return '#e6a817';
-    case 'RECOVERING': return '#bc8cff';
-    case 'EOL':        return '#666680';
-    case 'GRAVEYARD':  return '#555577';
-    case 'OFFLINE':    return '#4a4a55';
-    default:           return '#39d0d8';
-  }
-}
-
-function drawTerminator(ctx, W, H) {
-  /* The terminator is the great circle perpendicular to the subsolar direction.
-     Approach: for each column of pixels (x), compute the day/night boundary lat
-     and shade everything above (or below) it with a semi-transparent overlay.
-
-     1. Compute subsolar point (lat_s, lon_s)
-     2. For each longitude (map column x), the terminator latitude is:
-          cos(Δlon) * cos(lat_s) * cos(lat_term) + sin(lat_s) * sin(lat_term) = 0
-          → tan(lat_term) = -cos(Δlon) * cos(lat_s) / sin(lat_s)
-     3. Fill the night portion
-  */
-  const solar = subSolarPoint();
-  const lat_s = solar.lat * Math.PI / 180;
-  const lon_s = solar.lon;
-
-  // Update info chip
-  document.getElementById('term-lon').textContent = `${solar.lon.toFixed(1)}°`;
-
-  ctx.save();
-  ctx.fillStyle = 'rgba(200, 220, 255, 0.2)'; // light blue night tint
-
-  for (let px = 0; px < W; px++) {
-    const lon_deg = (px / W) * 360 - 180;
-    const dlon    = (lon_deg - lon_s) * Math.PI / 180;
-
-    if (Math.abs(lat_s) < 0.001) {
-      // Edge case: equinox — terminator is vertical at lon_s ± 90°
-      const cosD = Math.cos(dlon);
-      if (cosD < 0) ctx.fillRect(px, 0, 1, H);
-      continue;
-    }
-
-    const tanLat  = -Math.cos(dlon) * (Math.cos(lat_s) / Math.sin(lat_s));
-    const lat_term = Math.atan(tanLat);
-    const yTerm   = mercatorY(lat_term * 180 / Math.PI, H);
-
-    // Sun is above equator: night is poleward from terminator on the dark side
-    if (Math.cos(dlon) > 0) {
-      // dayside top
-      ctx.fillRect(px, 0, 1, yTerm);
-    } else {
-      // dayside bottom
-      ctx.fillRect(px, yTerm, 1, H - yTerm);
-    }
-  }
-  ctx.restore();
-}
-
-function drawWorldOutline(ctx, W, H) {
-  /* Draw simplified continental outlines using a pre-defined set of polygons.
-     For production: load a topojson. For hackathon: use approximation below.   */
-  ctx.fillStyle   = '#e6edf3';
-  ctx.strokeStyle = 'rgba(0,0,0,0.07)';
-  ctx.lineWidth   = 0.5;
-
-  // We draw the ocean as dark background (already done) and continents slightly lighter
-  // Using simplified lat/lon bounding boxes as rough continent shapes
-  const continents = [
-    // North America (rough)
-    [[-170,72],[-170,15],[-55,15],[-55,47],[-80,47],[-80,72]],
-    // South America
-    [[-80,12],[-80,-55],[-35,-55],[-35,5],[-55,12]],
-    // Europe
-    [[-10,72],[-10,35],[40,35],[40,72]],
-    // Africa
-    [[-20,37],[-20,-35],[52,-35],[52,12],[40,37]],
-    // Asia
-    [[40,72],[40,10],[150,10],[150,72]],
-    // Australia
-    [[113,-10],[113,-44],[154,-44],[154,-10]],
-    // Greenland
-    [[-50,83],[-50,60],[-20,60],[-20,83]],
-    // Antarctica (rough band at bottom)
-    [[-180,-65],[-180,-90],[180,-90],[180,-65]],
-  ];
-
-  continents.forEach(pts => {
-    ctx.beginPath();
-    pts.forEach(([lon,lat], i) => {
-      const x = mercatorX(lon, W);
-      const y = mercatorY(lat, H);
-      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-    });
-    ctx.closePath();
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.05)';
-    ctx.stroke();
-  });
-}
-
-function rebuildDebrisCanvas(W, H) {
-  /* Paint all debris points onto an offscreen canvas once.
-     Main canvas just blits it each frame. This is what enables 10k+ dots at 60fps. */
-  debrisCanvas = document.createElement('canvas');
-  debrisCanvas.width  = W;
-  debrisCanvas.height = H;
-  const dc = debrisCanvas.getContext('2d');
-
-  state.debris.forEach(deb => {
-    const lat = deb[1], lon = deb[2];
-    if (lat === undefined || lon === undefined) return;
-    const x = mercatorX(lon, W);
-    const y = mercatorY(lat, H);
-    dc.fillStyle = 'rgba(248,81,73,0.55)';
-    dc.fillRect(x-1, y-1, 2, 2);
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// PANEL 2: BULLSEYE (SVG)
-// ═══════════════════════════════════════════════════════════════════
-function updateBullseye() {
+// ── COLLISION ─────────────────────────────────────────────────
+function renderCollision() {
+  const {cdms} = state;
   const svg = document.getElementById('bullseye-svg');
-  const ns  = 'http://www.w3.org/2000/svg';
-  svg.innerHTML = '';
+  const ns = 'http://www.w3.org/2000/svg';
+  svg.innerHTML='';
+  const W=400,H=400,cx=W/2,cy=H/2,maxR=160;
+  const mk=(tag,a)=>{const e=document.createElementNS(ns,tag);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e;};
 
-  const W=340, H=380, cx=170, cy=185, maxR=130;
+  svg.appendChild(mk('rect',{width:W,height:H,fill:'#060A10'}));
+  [[maxR,'#1E3048',1],[maxR*.64,'#e3b341',.3],[maxR*.32,'#FF3D57',.4]].forEach(([r,col,op])=>{
+    svg.appendChild(mk('circle',{cx,cy,r,fill:'none',stroke:col,'stroke-width':.8,'stroke-dasharray':'5 3',opacity:op}));
+  });
+  // Zone fills
+  svg.appendChild(mk('circle',{cx,cy,r:maxR*.64,fill:'rgba(255,149,0,.04)'}));
+  svg.appendChild(mk('circle',{cx,cy,r:maxR*.32,fill:'rgba(255,61,87,.06)'}));
+  // Axes
+  [[cx,cy-maxR-8,cx,cy+maxR+8],[cx-maxR-8,cy,cx+maxR+8,cy]].forEach(([x1,y1,x2,y2])=>
+    svg.appendChild(mk('line',{x1,y1,x2,y2,stroke:'#1E3048','stroke-width':.6})));
+  // Labels
+  [['5km',maxR],['3km',maxR*.64],['1km',maxR*.32]].forEach(([lbl,r])=>{
+    const t=mk('text',{x:cx+r+3,y:cy-4,fill:'#5A7A9A','font-size':9,'font-family':'Courier New'});
+    t.textContent=lbl; svg.appendChild(t);
+  });
+  // Center satellite
+  svg.appendChild(mk('circle',{cx,cy,r:7,fill:'#00E5FF',stroke:'#000','stroke-width':1.5}));
+  const ct=mk('text',{x:cx+10,y:cy-9,fill:'#00E5FF','font-size':8,'font-family':'Courier New'});
+  ct.textContent='SAT'; svg.appendChild(ct);
 
-  const mk = (tag, attrs, text='') => {
-    const el = document.createElementNS(ns, tag);
-    Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k,v));
-    if (text) el.textContent = text;
-    return el;
+  if(cdms.length===0){
+    const t=mk('text',{x:cx,y:cy+80,'text-anchor':'middle',fill:'#00FF9C','font-size':11,'font-family':'Courier New'});
+    t.textContent='NO THREATS DETECTED'; svg.appendChild(t);
+    document.getElementById('col-badge').textContent='CLEAR';
+    document.getElementById('col-badge').style.color='var(--green)';
+  } else {
+    cdms.slice(0,20).forEach(pt=>{
+      const angle=(pt.approach_angle_deg||0)*Math.PI/180;
+      const d=pt.miss_dist_km||0;
+      const scaled=Math.min(Math.sqrt(Math.min(d,5)/5)*maxR,maxR-10);
+      const x=cx+scaled*Math.cos(angle), y=cy-scaled*Math.sin(angle);
+      const col=d<0.1?'#FF3D57':d<1?'#FF9500':'#00FF9C';
+      const r=d<0.1?9:d<1?7:5;
+      if(d<0.1){
+        svg.appendChild(mk('circle',{cx:x,cy:y,r:16,fill:'none',stroke:'#FF3D57','stroke-width':1,opacity:.25}));
+        svg.appendChild(mk('circle',{cx:x,cy:y,r:22,fill:'none',stroke:'#FF3D57','stroke-width':.5,opacity:.12}));
+      }
+      svg.appendChild(mk('circle',{cx:x,cy:y,r,fill:col,opacity:.9}));
+      const lbl=mk('text',{x:x+r+3,y:y+4,fill:col,'font-size':8,'font-family':'Courier New'});
+      lbl.textContent=`${(pt.satellite_id||'').slice(-6)} ${d.toFixed(2)}km`;
+      svg.appendChild(lbl);
+    });
+    document.getElementById('col-badge').textContent=`${cdms.length} THREAT(S)`;
+    document.getElementById('col-badge').style.color='var(--red)';
+  }
+
+  // CDM table
+  const tbody = document.getElementById('cdm-tbody');
+  if(cdms.length===0){
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:20px;letter-spacing:1px">NO ACTIVE CDMs</td></tr>';
+  } else {
+    tbody.innerHTML=cdms.slice(0,30).map(c=>{
+      const d=c.miss_dist_km;
+      const [rc,rl]=d<0.1?['risk-crit','CRITICAL']:d<1?['risk-high','HIGH']:d<3?['risk-med','MEDIUM']:['risk-low','LOW'];
+      const tca=c.tca?new Date(c.tca).toLocaleTimeString():'-';
+      return `<tr>
+        <td style="color:var(--cyan)">${c.satellite_id||'-'}</td>
+        <td style="color:var(--muted)">${c.debris_id||'-'}</td>
+        <td style="color:var(--text)">${d?d.toFixed(3):'-'} km</td>
+        <td style="color:var(--muted)">${tca}</td>
+        <td><span class="risk-chip ${rc}">${rl}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Narration
+  const crit=cdms.filter(c=>c.miss_dist_km<0.1);
+  const high=cdms.filter(c=>c.miss_dist_km>=0.1&&c.miss_dist_km<1);
+  let n='';
+  if(cdms.length===0){n=`<span class="good">Orbital environment clear.</span> No conjunctions detected in 24-hour lookahead window across all tracked objects.`;}
+  else{
+    if(crit.length>0) n+=`<span class="danger">${crit.length} CRITICAL threat(s)</span> with miss distance under 100 metres. Autonomous evasion burns are being calculated. `;
+    if(high.length>0) n+=`<span class="warn">${high.length} high-risk approach(es)</span> within 1 km — monitoring closely. `;
+    const closest=cdms.reduce((a,b)=>a.miss_dist_km<b.miss_dist_km?a:b);
+    n+=`Closest approach: <span>${closest.miss_dist_km.toFixed(3)} km</span> for satellite <span>${closest.satellite_id}</span>. `;
+    n+=`System has scheduled evasion burns to avoid all critical conjunctions.`;
+  }
+  document.getElementById('col-narration').innerHTML=n;
+}
+
+// ── FUEL ──────────────────────────────────────────────────────
+function renderFuel() {
+  const {sats} = state;
+  const grid = document.getElementById('fuel-grid');
+  document.getElementById('fuel-badge').textContent=`${sats.length} SATELLITES`;
+  if(sats.length===0){grid.innerHTML='<div class="empty">AWAITING SATELLITE TELEMETRY</div>';return;}
+  grid.innerHTML=sats.map(s=>{
+    const pct=Math.min(100,Math.max(0,(s.fuel_kg/50)*100));
+    const col=pct<=5?'var(--red)':pct<=20?'var(--orange)':'var(--green)';
+    const sc=s.status==='NOMINAL'?'var(--green)':s.status==='EVADING'?'var(--orange)':s.status==='RECOVERING'?'var(--purple)':'var(--red)';
+    const st=s.status;
+    const alert=pct<=5?'<div class="fc-alert blink"></div>':'';
+    return `<div class="fc" style="border-color:${pct<=5?'var(--red)':pct<=20?'var(--orange)':'var(--border)'}">
+      ${alert}
+      <div class="fc-id">${s.id}</div>
+      <div class="fc-pct" style="color:${col}">${Math.round(pct)}%</div>
+      <div class="fc-bar-bg"><div class="fc-bar" style="width:${pct}%;background:${col}"></div></div>
+      <div class="fc-status" style="color:${sc}">${st}</div>
+      <div class="fc-kg">${s.fuel_kg.toFixed(1)} kg remaining</div>
+    </div>`;
+  }).join('');
+
+  const minFuel=Math.min(...sats.map(s=>s.fuel_kg));
+  const avgPct=Math.round(sats.reduce((a,s)=>a+s.fuel_kg,0)/sats.length/50*100);
+  const eol=sats.filter(s=>s.fuel_kg<=2.5);
+  let n=`Fleet average propellant: <span>${avgPct}%</span>. `;
+  if(eol.length>0) n+=`<span class="danger">${eol.length} satellite(s) below 5% threshold</span> — end-of-life protocol initiated. Graveyard orbit burn imminent. `;
+  else n+=`Lowest reserve: <span>${minFuel.toFixed(1)} kg</span> on ${sats.reduce((a,s)=>s.fuel_kg<a.fuel_kg?s:a,sats[0]).id}. `;
+  n+=`Each evasion maneuver consumes approximately <span>1.8 kg</span> of propellant (8 m/s retrograde + 8 m/s recovery). `;
+  n+=`At current consumption rate, fleet has sufficient propellant for all planned operations.`;
+  document.getElementById('fuel-narration').innerHTML=n;
+}
+
+// ── MANEUVER ─────────────────────────────────────────────────
+function renderManeuver() {
+  const {burns,sats} = state;
+  document.getElementById('man-badge').textContent=`${burns.length} BURNS`;
+  const wrap = document.getElementById('tl-wrap');
+  if(burns.length===0){
+    wrap.innerHTML='<div class="empty" style="min-height:200px">NO MANEUVERS SCHEDULED — ALL SATELLITES NOMINAL</div>';
+    document.getElementById('man-narration').innerHTML=`All satellites are maintaining their nominal orbital slots. No evasion maneuvers are currently required.`;
+    return;
+  }
+
+  const W=Math.max(800,burns.length*140+120), H=Math.max(180,burns.length*40+80);
+  const ns='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(ns,'svg');
+  svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.style.cssText='display:block;background:#FFFFFF;border-radius:4px';
+  const mk=(tag,a)=>{const e=document.createElementNS(ns,tag);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));return e;};
+
+  const timeFromBurn = b => {
+    const start = b.start || b.start_time || b.begin || b.scheduled_start;
+    const end = b.end || b.end_time || b.finish || b.scheduled_end;
+    const s = start ? new Date(start).getTime() : NaN;
+    const e = end ? new Date(end).getTime() : NaN;
+    return {s,e};
   };
 
-  // Background
-  svg.appendChild(mk('rect',{x:0,y:0,width:W,height:H,fill:'#f6f8fa'}));
-
-  // Sector shading
-  const sectorColors = [
-    {r:maxR,    col:'rgba(248,81,73,0.04)'},
-    {r:maxR*.6, col:'rgba(248,81,73,0.06)'},
-    {r:maxR*.3, col:'rgba(248,81,73,0.10)'},
-  ];
-  sectorColors.forEach(s => {
-    svg.appendChild(mk('circle',{cx,cy,r:s.r,fill:s.col,stroke:'none'}));
-  });
-
-  // Risk rings
-  const rings = [
-    {r:maxR,     label:'5 km',  col:'#2da44e'},
-    {r:maxR*.65, label:'3 km',  col:'#d29922'},
-    {r:maxR*.35, label:'1 km',  col:'#f85149'},
-    {r:maxR*.1,  label:'100m',  col:'#f85149'},
-  ];
-  rings.forEach(ring => {
-    svg.appendChild(mk('circle',{
-      cx,cy,r:ring.r,fill:'none',
-      stroke:ring.col,'stroke-width':'0.7',
-      'stroke-dasharray':'4 3',opacity:'0.6'
-    }));
-    svg.appendChild(mk('text',{
-      x:cx+ring.r+3,y:cy-3,fill:ring.col,
-      'font-size':'8','font-family':'Space Mono,monospace',opacity:'0.7'
-    }, ring.label));
-  });
-
-  // Cross hairs
-  svg.appendChild(mk('line',{x1:cx,y1:cy-maxR-5,x2:cx,y2:cy+maxR+5,
-    stroke:'#30363d','stroke-width':'0.5'}));
-  svg.appendChild(mk('line',{x1:cx-maxR-5,y1:cy,x2:cx+maxR+5,y2:cy,
-    stroke:'#30363d','stroke-width':'0.5'}));
-
-  // Center SAT
-  svg.appendChild(mk('circle',{cx,cy,r:7,fill:'#39d0d8',stroke:'#0d1117','stroke-width':'1.5'}));
-  svg.appendChild(mk('text',{x:cx+10,y:cy-8,fill:'#39d0d8',
-    'font-size':'8','font-family':'Space Mono,monospace'},'SAT'));
-
-  const pts = state.cdms || [];
-
-  if (pts.length === 0) {
-    svg.appendChild(mk('text',{
-      x:cx,y:cy+55,'text-anchor':'middle',
-      fill:'#3fb950','font-size':'11','font-family':'Space Mono,monospace'
-    },'ALL CLEAR'));
-    svg.appendChild(mk('text',{
-      x:cx,y:cy+70,'text-anchor':'middle',
-      fill:'#8b949e','font-size':'9','font-family':'Space Mono,monospace'
-    },'No conjunctions in next 24h'));
-    document.getElementById('cdm-count').textContent = 'ALL CLEAR';
-    document.getElementById('cdm-count').style.color = 'var(--green)';
-  } else {
-    document.getElementById('cdm-count').textContent = `${pts.length} THREAT(S)`;
-    document.getElementById('cdm-count').style.color = 'var(--red)';
-
-    pts.forEach(pt => {
-      const dist = pt.miss_dist_km || pt.miss_distance_km || 5;
-      const angle= ((pt.approach_angle_deg || 0) * Math.PI) / 180;
-      const scaled = Math.min(Math.sqrt(dist/5)*maxR, maxR-8);
-      const x    = cx + scaled * Math.cos(angle);
-      const y    = cy - scaled * Math.sin(angle);
-
-      const col  = dist < 0.1 ? '#f85149' : dist < 1 ? '#e3b341' : '#3fb950';
-      const r    = dist < 0.1 ? 8 : dist < 1 ? 6 : 5;
-
-      // Approach vector line
-      svg.appendChild(mk('line',{
-        x1:cx,y1:cy,x2:x,y2:y,
-        stroke:col,'stroke-width':'0.5',opacity:'0.25',
-        'stroke-dasharray':'3 3'
-      }));
-
-      // Pulse animation for critical
-      if (dist < 0.1) {
-        const pulse = mk('circle',{cx:x,cy:y,r:r+6,fill:'none',
-          stroke:'#f85149','stroke-width':'1',opacity:'0'});
-        const anim = document.createElementNS(ns,'animate');
-        anim.setAttribute('attributeName','opacity');
-        anim.setAttribute('values','0.6;0');
-        anim.setAttribute('dur','1.2s');
-        anim.setAttribute('repeatCount','indefinite');
-        const anim2 = document.createElementNS(ns,'animate');
-        anim2.setAttribute('attributeName','r');
-        anim2.setAttribute('values',`${r+2};${r+14}`);
-        anim2.setAttribute('dur','1.2s');
-        anim2.setAttribute('repeatCount','indefinite');
-        anim2.setAttribute('attributeName','r');
-        pulse.appendChild(anim);
-        pulse.appendChild(anim2);
-        svg.appendChild(pulse);
-      }
-
-      svg.appendChild(mk('circle',{cx:x,cy:y,r,fill:col,
-        stroke:'#0d1117','stroke-width':'0.8',opacity:'0.9'}));
-
-      // Label
-      svg.appendChild(mk('text',{
-        x:x+r+3,y:y+3,fill:col,
-        'font-size':'7','font-family':'Space Mono,monospace'
-      },`${dist.toFixed(2)}km`));
-    });
-
-    // Legend below
-    const legendY = cy + maxR + 20;
-    svg.appendChild(mk('text',{
-      x:cx,y:legendY,'text-anchor':'middle',
-      fill:'#f85149','font-size':'10','font-family':'Space Mono,monospace',
-      'font-weight':'bold'
-    },`${pts.length} CONJUNCTION(S) — NEXT 24H`));
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// PANEL 3: FUEL HEATMAP
-//
-// What it shows:
-// ─ Each satellite gets a card with a fuel % bar
-// ─ Green > 20%, Amber 5-20%, Red < 5%
-// ─ EOL satellites get a red "EOL" badge + "GRAVEYARD BURN PENDING"
-// ─ Graveyard satellites show a purple "DEORBITING" badge
-//
-// Graveyard logic explanation (inline text in card):
-//   When fuel < 5% of initial (2.5kg), the system automatically schedules
-//   a retrograde burn to lower the perigee below 200km. This deorbits the
-//   satellite within ~25 years, preventing it from becoming debris itself.
-// ═══════════════════════════════════════════════════════════════════
-function updateFuel() {
-  const grid = document.getElementById('fuel-grid');
-  const sats = state.sats;
-
-  if (!sats || sats.length === 0) {
-    grid.innerHTML = '<div class="no-data">AWAITING TELEMETRY…</div>';
+  const burnData = burns.map(b => ({...b, ...timeFromBurn(b)})).filter(b => !isNaN(b.s) && !isNaN(b.e));
+  if (burnData.length === 0) {
+    wrap.innerHTML='<div class="empty" style="min-height:200px">NO TIMESTAMPED BURNS AVAILABLE</div>';
+    document.getElementById('man-narration').innerHTML=`No valid maneuver times provided by the backend. Please include start/end fields in the burn payload.`;
     return;
   }
 
-  grid.innerHTML = '';
-  // Sort: EOL first, then by fuel ascending
-  const sorted = [...sats].sort((a,b) => {
-    if ((a.status==='EOL') !== (b.status==='EOL')) return a.status==='EOL' ? -1 : 1;
-    return (a.fuel_kg||0) - (b.fuel_kg||0);
-  });
+  const tMin = Math.min(...burnData.map(b => b.s));
+  const tMax = Math.max(...burnData.map(b => b.e));
+  const range = Math.max(1, tMax - tMin);
+  const toX = t => 60 + ((t - tMin) / range) * (W - 80);
+  const axY = H - 36;
 
-  sorted.forEach(sat => {
-    const pct     = Math.min(100, Math.max(0,(sat.fuel_kg/50)*100));
-    const isCrit  = pct <= 5;
-    const isWarn  = pct <= 20 && !isCrit;
-    const colCls  = isCrit ? 'red' : isWarn ? 'amber' : 'cyan';
-    const barCol  = isCrit ? 'var(--red)' : isWarn ? 'var(--amber)' : 'var(--cyan)';
-    const isEOL   = sat.status === 'EOL' || sat.status === 'GRAVEYARD';
-    const isGrave = state.graveyardSats.has(sat.id);
-
-    const card = document.createElement('div');
-    card.className = 'fuel-card';
-    if (isCrit) card.style.borderColor = 'var(--red)';
-    else if (isWarn) card.style.borderColor = 'var(--amber)';
-
-    let badge = '';
-    if (isGrave)      badge = '<div class="graveyard-badge">DEORBITING</div>';
-    else if (isEOL)   badge = '<div class="eol-badge">GRAVEYARD BURN PENDING</div>';
-
-    /* ── Graveyard explanation (shown only on EOL cards) ──
-       This small text block explains to the judge WHY this satellite
-       is being moved to a graveyard orbit — it's the EOL management feature. */
-    const eolNote = isEOL ? `
-      <div style="font-size:7px;font-family:var(--font-mono);color:var(--purple);
-        margin-top:5px;line-height:1.4;text-align:left;border-top:1px solid var(--border);
-        padding-top:4px;">
-        ⬇ Retrograde burn scheduled<br>
-        Perigee → &lt;200km<br>
-        Deorbit in ~25 years
-      </div>` : '';
-
-    card.innerHTML = `
-      <div class="fc-id" title="${sat.id}">${sat.id}</div>
-      <div class="fc-pct" style="color:var(--${colCls})">${Math.round(pct)}%</div>
-      <div class="fc-bar-wrap">
-        <div class="fc-bar" style="width:${pct}%;background:${barCol}"></div>
-      </div>
-      <div class="fc-status" style="color:var(--${colCls})">${sat.status||'NOMINAL'}</div>
-      <div class="fc-kg">${(sat.fuel_kg||0).toFixed(1)} kg</div>
-      ${badge}
-      ${eolNote}
-    `;
-    grid.appendChild(card);
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// PANEL 4: ΔV EFFICIENCY CHART (Canvas line graph)
-//
-// X axis: time (simulation time progression)
-// Y axis left: cumulative ΔV consumed (m/s)
-// Y axis right: collisions avoided (count)
-//
-// Shows the trade-off: we burn fuel to avoid collisions.
-// A good system has a FLAT ΔV curve with high avoidance count.
-// ═══════════════════════════════════════════════════════════════════
-function updateDVChart() {
-  const c   = document.getElementById('dv-canvas');
-  if (!c) return;
-  const ctx = c.getContext('2d');
-  const W   = c.width, H = c.height;
-  if (W < 10 || H < 10) return;
-
-  const PAD = { top:28, right:50, bottom:36, left:54 };
-  const iW  = W - PAD.left - PAD.right;
-  const iH  = H - PAD.top  - PAD.bottom;
-
-  ctx.fillStyle = '#f6f8fa';
-  ctx.fillRect(0, 0, W, H);
-
-  const hist = state.dvHistory;
-
-  // Axis labels
-  ctx.font      = '8px Space Mono, monospace';
-  ctx.fillStyle = 'var(--muted, #656d76)';
-  ctx.textAlign = 'center';
-  ctx.fillText('TIME (SIMULATION PROGRESSION)', W/2, H-4);
-
-  ctx.save();
-  ctx.translate(12, PAD.top + iH/2);
-  ctx.rotate(-Math.PI/2);
-  ctx.fillText('CUMULATIVE ΔV (m/s)', 0, 0);
-  ctx.restore();
-
-  ctx.save();
-  ctx.translate(W-12, PAD.top + iH/2);
-  ctx.rotate(Math.PI/2);
-  ctx.fillStyle = '#3fb950';
-  ctx.fillText('COLLISIONS AVOIDED', 0, 0);
-  ctx.restore();
-
-  if (hist.length < 2) {
-    ctx.font = '11px Space Mono, monospace';
-    ctx.fillStyle = 'rgba(101,109,118,0.5)';
-    ctx.textAlign = 'center';
-    ctx.fillText('AWAITING DATA…', W/2, H/2);
-    return;
+  // Axis
+  svg.appendChild(mk('line',{x1:60,y1:axY,x2:W-20,y2:axY,stroke:'#1E3048','stroke-width':1.5}));
+  for(let i=0;i<=6;i++){
+    const t=tMin + (range * i / 6);
+    const x=toX(t);
+    const lbl=mk('text',{x,y:axY+14,'text-anchor':'middle',fill:'#5A7A9A','font-size':8,'font-family':'Courier New'});
+    lbl.textContent=new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    svg.appendChild(lbl);
+    svg.appendChild(mk('line',{x1:x,y1:axY-3,x2:x,y2:axY+3,stroke:'#1E3048','stroke-width':1}));
   }
 
-  const maxDV   = Math.max(...hist.map(h=>h.dv), 1);
-  const maxColl = Math.max(...hist.map(h=>h.collAvoided), 1);
-  const n       = hist.length;
+  // Lanes
+  const satIds=[...new Set(burnData.map(b=>b.satellite_id || b.id || 'UNKN'))];
+  const laneH=35, topPad=16;
+  satIds.forEach((sid,si)=>{
+    const y=topPad+si*laneH;
+    const lbl=mk('text',{x:55,y:y+laneH/2+4,'text-anchor':'end',fill:'#5A7A9A','font-size':9,'font-family':'Courier New'});
+    lbl.textContent=sid.toString().slice(-8); svg.appendChild(lbl);
+    svg.appendChild(mk('line',{x1:60,y1:y+laneH,x2:W-20,y2:y+laneH,stroke:'#0D1520','stroke-width':.5}));
 
-  // Grid lines
-  ctx.strokeStyle = 'rgba(0,0,0,0.05)';
-  ctx.lineWidth   = 0.7;
-  for (let i=0; i<=4; i++) {
-    const y = PAD.top + (iH * i/4);
-    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left+iW, y); ctx.stroke();
-    ctx.font = '8px Space Mono,monospace';
-    ctx.fillStyle = 'rgba(101,109,118,0.6)';
-    ctx.textAlign = 'right';
-    ctx.fillText((maxDV*(1-i/4)).toFixed(1), PAD.left-4, y+3);
-  }
-
-  // DV line (amber)
-  ctx.strokeStyle = 'var(--amber, #e6a817)';
-  ctx.lineWidth   = 1.5;
-  ctx.beginPath();
-  hist.forEach((h,i) => {
-    const x = PAD.left + (i/(n-1)) * iW;
-    const y = PAD.top  + iH * (1 - h.dv/maxDV);
-    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-  });
-  ctx.stroke();
-
-  // DV area fill
-  const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top+iH);
-  grad.addColorStop(0, 'rgba(230,168,23,0.2)');
-  grad.addColorStop(1, 'rgba(230,168,23,0)');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  hist.forEach((h,i) => {
-    const x = PAD.left + (i/(n-1)) * iW;
-    const y = PAD.top  + iH * (1 - h.dv/maxDV);
-    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-  });
-  ctx.lineTo(PAD.left + iW, PAD.top + iH);
-  ctx.lineTo(PAD.left, PAD.top + iH);
-  ctx.closePath(); ctx.fill();
-
-  // Collisions avoided line (green, right axis)
-  ctx.strokeStyle = '#3fb950';
-  ctx.lineWidth   = 1.5;
-  ctx.beginPath();
-  hist.forEach((h,i) => {
-    const x = PAD.left + (i/(n-1)) * iW;
-    const y = PAD.top  + iH * (1 - h.collAvoided/maxColl);
-    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-  });
-  ctx.stroke();
-
-  // Right axis labels
-  for (let i=0; i<=4; i++) {
-    const y = PAD.top + (iH * i/4);
-    ctx.font      = '8px Space Mono,monospace';
-    ctx.fillStyle = 'rgba(63,185,80,0.6)';
-    ctx.textAlign = 'left';
-    ctx.fillText(Math.round(maxColl*(1-i/4)), PAD.left+iW+4, y+3);
-  }
-
-  // Title
-  ctx.font      = '9px Space Mono,monospace';
-  ctx.fillStyle = 'rgba(230,168,23,0.7)';
-  ctx.textAlign = 'left';
-  ctx.fillText('— ΔV CONSUMED', PAD.left+8, PAD.top-8);
-  ctx.fillStyle = 'rgba(63,185,80,0.7)';
-  ctx.fillText('— AVOIDANCES', PAD.left+90, PAD.top-8);
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// PANEL 5: GANTT TIMELINE (Canvas)
-//
-// Rows: one per satellite
-// Columns: time axis
-// Blocks:
-//   AMBER  = EVASION burn (retrograde)
-//   GREEN  = RECOVERY burn (prograde, return to slot)
-//   PURPLE = GRAVEYARD burn (final deorbit maneuver)
-//   GREY   = Cooldown period (mandatory 600s)
-//
-// A satellite at ≤5% fuel gets a PURPLE "GRAVEYARD" block added
-// automatically, showing when the final deorbit burn is scheduled.
-// This is the "bring it back to graveyard" feature visible on the UI.
-// ═══════════════════════════════════════════════════════════════════
-function updateTimeline() {
-  const c     = document.getElementById('timeline-canvas');
-  const wrap  = document.getElementById('timeline-wrap');
-  const badge = document.getElementById('burn-count');
-
-  if (!c) return;
-  badge.textContent = `${state.burns.length} BURNS`;
-
-  const burns = state.burns;
-
-  if (burns.length === 0) {
-    // Resize to at least show something
-    c.width  = wrap.clientWidth || 600;
-    c.height = 80;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#f6f8fa';
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.font      = '11px Space Mono, monospace';
-    ctx.fillStyle = 'rgba(101,109,118,0.4)';
-    ctx.textAlign = 'center';
-    ctx.fillText('NO MANEUVERS SCHEDULED — SYSTEM NOMINAL', c.width/2, 44);
-    return;
-  }
-
-  // Satellite rows
-  const satIds  = [...new Set(burns.map(b=>b.satellite_id))].sort();
-  const ROW_H   = 36;
-  const PAD_L   = 80;
-  const PAD_T   = 32;
-  const PAD_B   = 30;
-  const H       = PAD_T + satIds.length * ROW_H + PAD_B;
-  const minW    = wrap.clientWidth || 800;
-
-  // Time range
-  const times   = burns.flatMap(b=>[new Date(b.start).getTime(), new Date(b.end).getTime()]);
-  const tMin    = Math.min(...times);
-  const tMax    = Math.max(...times) + 600_000;
-  const tRange  = tMax - tMin || 1;
-  const W       = Math.max(minW, 800);
-
-  c.width  = W;
-  c.height = H;
-  const ctx = c.getContext('2d');
-
-  ctx.fillStyle = '#f6f8fa';
-  ctx.fillRect(0, 0, W, H);
-
-  const toPx = (ts) => PAD_L + ((ts - tMin) / tRange) * (W - PAD_L - 20);
-
-  // Time axis
-  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-  ctx.lineWidth   = 0.5;
-  const tickCount = Math.min(10, Math.floor((W - PAD_L) / 80));
-  for (let i=0; i<=tickCount; i++) {
-    const t  = tMin + (tRange * i/tickCount);
-    const x  = toPx(t);
-    const ts = new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    ctx.beginPath(); ctx.moveTo(x, PAD_T-4); ctx.lineTo(x, H-PAD_B+4); ctx.stroke();
-    ctx.font = '8px Space Mono,monospace'; ctx.fillStyle='rgba(101,109,118,0.5)';
-    ctx.textAlign='center'; ctx.fillText(ts, x, H-PAD_B+14);
-  }
-
-  // Satellite rows
-  satIds.forEach((sid, si) => {
-    const rowY = PAD_T + si * ROW_H;
-
-    // Row separator
-    ctx.strokeStyle = 'rgba(0,0,0,0.04)';
-    ctx.lineWidth   = 0.5;
-    ctx.beginPath(); ctx.moveTo(PAD_L, rowY+ROW_H); ctx.lineTo(W-20, rowY+ROW_H); ctx.stroke();
-
-    // Row label
-    ctx.font = '8px Space Mono,monospace'; ctx.fillStyle='rgba(101,109,118,0.7)';
-    ctx.textAlign='right'; ctx.fillText(sid.slice(-8), PAD_L-6, rowY+ROW_H/2+3);
-
-    // EOL indicator if in graveyard set
-    if (state.graveyardSats.has(sid)) {
-      ctx.font='7px Space Mono,monospace'; ctx.fillStyle='rgba(188,140,255,0.6)';
-      ctx.textAlign='right'; ctx.fillText('[EOL]', PAD_L-6, rowY+ROW_H/2+12);
-    }
-
-    // Burn blocks for this satellite
-    burns.filter(b=>b.satellite_id===sid).forEach(b => {
-      const x1  = toPx(new Date(b.start).getTime());
-      const x2  = toPx(new Date(b.end).getTime());
-      const bw  = Math.max(x2-x1, 6);
-      const by  = rowY + 5;
-      const bh  = ROW_H - 10;
-
-      // Colour by type
-      let col = '#e6a817'; // default: evasion
-      let label = 'EVADE';
-      if (b.type === 'RECOVERY' || b.type === 'RETURN') { col='#3fb950'; label='RETURN'; }
-      else if (b.type === 'GRAVEYARD') { col='#bc8cff'; label='GRAVEYARD'; }
-      else if (b.type === 'EVASION')   { col='#e6a817'; label='EVADE'; }
-
+    burnData.filter(b=>(b.satellite_id||b.id||'UNKN')===sid).forEach(b=>{
+      const x1=toX(b.s);
+      const x2=toX(b.e);
+      const bw=Math.max(x2-x1,10);
+      const isEv=b.type==='EVASION';
+      const isRe=b.type==='RECOVERY';
+      const col=isEv?'#FF9500':isRe?'#00FF9C':'#4488FF';
       // Burn block
-      ctx.fillStyle = col + 'cc';
-      ctx.beginPath();
-      roundRect(ctx, x1, by, bw, bh, 3);
-      ctx.fill();
-      ctx.strokeStyle = col;
-      ctx.lineWidth   = 0.8;
-      ctx.beginPath();
-      roundRect(ctx, x1, by, bw, bh, 3);
-      ctx.stroke();
-
-      // Label inside block
-      if (bw > 35) {
-        ctx.font = '7px Space Mono,monospace';
-        ctx.fillStyle = '#fff';
-        ctx.textAlign = 'center';
-        ctx.fillText(label, x1+bw/2, by+bh/2+2.5);
+      svg.appendChild(mk('rect',{x:x1,y:y+4,width:bw,height:laneH-10,rx:2,fill:col,opacity:.85}));
+      if(bw>28){
+        const l=mk('text',{x:x1+bw/2,y:y+laneH/2+4,'text-anchor':'middle',fill:'#000','font-size':8,'font-weight':'bold','font-family':'Courier New'});
+        l.textContent=isEv?'EVADE':isRe?'RETURN':'BURN';
+        svg.appendChild(l);
       }
-
-      // Cooldown block (600s)
-      const coolX  = x2;
-      const coolW  = Math.max(toPx(new Date(b.end).getTime() + 600_000) - x2, 4);
-      ctx.fillStyle= 'rgba(48,54,61,0.6)';
-      ctx.beginPath();
-      roundRect(ctx, coolX, by+4, coolW, bh-8, 2);
-      ctx.fill();
-
-      // Cooldown label
-      if (coolW > 40) {
-        ctx.font = '6px Space Mono,monospace';
-        ctx.fillStyle = 'rgba(101,109,118,0.4)';
-        ctx.textAlign = 'center';
-        ctx.fillText('COOL', coolX+coolW/2, by+bh/2+2);
-      }
+      // Cooldown
+      const cx2=Math.min(toX(b.e + 600000),W-20);
+      svg.appendChild(mk('rect',{x:x2,y:y+8,width:Math.max(cx2-x2,4),height:laneH-18,rx:1,fill:'#1E3048',opacity:.7}));
     });
   });
 
-  // "NOW" marker
-  if (state.simTime) {
-    const nowX = toPx(state.simTime.getTime());
-    if (nowX > PAD_L && nowX < W-20) {
-      ctx.strokeStyle = 'rgba(57,208,216,0.6)';
-      ctx.lineWidth   = 1;
-      ctx.setLineDash([4,3]);
-      ctx.beginPath(); ctx.moveTo(nowX, PAD_T-4); ctx.lineTo(nowX, H-PAD_B+4); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.font = '7px Space Mono,monospace';
-      ctx.fillStyle = 'rgba(57,208,216,0.7)';
-      ctx.textAlign = 'center';
-      ctx.fillText('NOW', nowX, PAD_T-7);
-    }
-  }
+  wrap.innerHTML=''; wrap.appendChild(svg);
+
+  const ev=burnData.filter(b=>b.type==='EVASION'), re=burnData.filter(b=>b.type==='RECOVERY');
+  let n=`<span>${burns.length} maneuver burn(s)</span> scheduled across <span>${satIds.length} satellite(s)</span>. `;
+  if(ev.length>0) n+=`<span class="danger">${ev.length} evasion burn(s)</span> (orange) will fire <span>8 m/s retrograde</span> to drop behind approaching debris. `;
+  if(re.length>0) n+=`<span class="warn">${re.length} recovery burn(s)</span> (green) will fire <span>8 m/s prograde</span> to return satellites to their nominal orbital slots. `;
+  n+=`Each burn followed by a mandatory <span>600-second thruster cooldown</span> period (grey blocks).`;
+  document.getElementById('man-narration').innerHTML=n;
 }
 
-// ── Utility: Canvas rounded rect ──────────────────────────────────
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y);
-  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r);
-  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h);
-  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r);
-  ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
+// ── GROUND STATIONS ───────────────────────────────────────────
+function renderGS() {
+  const grid = document.getElementById('gs-grid');
+  grid.innerHTML = GS_STATIONS.map(gs => {
+    const losClass = 'los-no'; // Will update dynamically
+    return `<div class="gs-card" id="gs-card-${gs.id}">
+      <div class="gs-name">${gs.name}</div>
+      <div class="gs-row"><span>ID</span><span class="gs-val">${gs.id}</span></div>
+      <div class="gs-row"><span>LAT / LON</span><span class="gs-val">${gs.lat}° / ${gs.lon}°</span></div>
+      <div class="gs-row"><span>MIN ELEVATION</span><span class="gs-val">${gs.min_el}°</span></div>
+      <div class="gs-row"><span>CONTACTS</span><span class="gs-val" id="gs-contacts-${gs.id}">--</span></div>
+      <div><span class="gs-los ${losClass}" id="gs-los-${gs.id}">COMPUTING LOS</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderGroundStation() {
+  const {sats} = state;
+  const nSats = sats.length;
+
+  // Approximate LOS: satellite is visible if elevation > 5°
+  // Simple distance-based approximation
+  GS_STATIONS.forEach(gs => {
+    let contactCount = 0;
+    sats.forEach(sat => {
+      const latDiff = Math.abs(sat.lat - gs.lat);
+      const lonDiff = Math.abs(sat.lon - gs.lon);
+      const dist = Math.sqrt(latDiff*latDiff + lonDiff*lonDiff);
+      if (dist < 30) contactCount++;
+    });
+    const hasLOS = contactCount > 0;
+    const losEl = document.getElementById(`gs-los-${gs.id}`);
+    const cntEl = document.getElementById(`gs-contacts-${gs.id}`);
+    if (losEl) {
+      losEl.className = `gs-los ${hasLOS ? 'los-yes' : 'los-no'}`;
+      losEl.textContent = hasLOS ? 'LOS ACTIVE' : 'NO CONTACT';
+    }
+    if (cntEl) cntEl.textContent = `${contactCount} SAT(S)`;
+  });
+
+  const activeGS = GS_STATIONS.filter(gs => {
+    let c=0;
+    sats.forEach(s=>{const d=Math.sqrt((s.lat-gs.lat)**2+(s.lon-gs.lon)**2);if(d<30)c++;});
+    return c>0;
+  });
+
+  let n = `Ground network has <span>${GS_STATIONS.length} stations</span> worldwide. `;
+  if(sats.length===0){n+='No satellites currently tracked.';} 
+  else {
+    n+=`Currently <span>${activeGS.length} station(s)</span> have line-of-sight contact with constellation. `;
+    n+=`Satellites with no ground station coverage are in <span class="warn">blackout zones</span> — any maneuver commands must be pre-scheduled before entering blackout. `;
+    n+=`IIT Delhi ground node (GS-005) requires minimum <span>15° elevation</span> angle for uplink.`;
+  }
+  document.getElementById('gs-narration').innerHTML=n;
+}
+
+// ── EFFICIENCY ────────────────────────────────────────────────
+function initCharts() {
+  const opts={responsive:true,maintainAspectRatio:false,animation:{duration:300},
+    plugins:{legend:{labels:{color:'#5A7A9A',font:{family:'Courier New',size:10}}}},
+    scales:{x:{ticks:{color:'#5A7A9A',font:{family:'Courier New',size:9}},grid:{color:'#1E3048'}},
+            y:{ticks:{color:'#5A7A9A',font:{family:'Courier New',size:9}},grid:{color:'#1E3048'}}}};
+  effChart = new Chart(document.getElementById('eff-chart'),{
+    type:'line',
+    data:{labels:[],datasets:[
+      {label:'ΔV CONSUMED (m/s)',data:[],borderColor:'#FF9500',backgroundColor:'rgba(255,149,0,.1)',tension:.4,fill:true},
+      {label:'AVOIDANCES',data:[],borderColor:'#00FF9C',backgroundColor:'rgba(0,255,156,.08)',tension:.4,fill:true,yAxisID:'y2'}
+    ]},
+    options:{...opts,scales:{...opts.scales,y2:{position:'right',ticks:{color:'#5A7A9A',font:{family:'Courier New',size:9}},grid:{display:false}}}}
+  });
+  fuelChart = new Chart(document.getElementById('fuel-chart'),{
+    type:'line',
+    data:{labels:[],datasets:[{label:'TOTAL FLEET FUEL (kg)',data:[],borderColor:'#00E5FF',backgroundColor:'rgba(0,229,255,.08)',tension:.4,fill:true}]},
+    options:opts
+  });
+}
+
+function renderEfficiency() {
+  const {sats,burns,cdms} = state;
+  const totalFuel = sats.reduce((a,s)=>a+s.fuel_kg,0);
+  const fuelUsed = Math.max(0, 50*sats.length - totalFuel);
+  const dvUsed = (fuelUsed * 9.80665 * 300 / (sats.reduce((a,s)=>a+s.mass_kg||550,0)/sats.length||550)) * 1000;
+
+  if (fuelHistory.length > 1) {
+    const labels = fuelHistory.slice(-30).map(h=>h.t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+    const fvals  = fuelHistory.slice(-30).map(h=>h.v.toFixed(1));
+    fuelChart.data.labels = labels;
+    fuelChart.data.datasets[0].data = fvals;
+    fuelChart.update();
+
+    // Eff chart: approximate DV history
+    effChart.data.labels = labels;
+    effChart.data.datasets[0].data = fuelHistory.slice(-30).map((h,i,arr)=>
+      i===0 ? 0 : Math.max(0,(arr[0].v-h.v)*9.80665*300/550).toFixed(2));
+    effChart.data.datasets[1].data = fuelHistory.slice(-30).map((_,i)=>
+      Math.min(i, cdms.filter(c=>c.miss_dist_km<0.1).length));
+    effChart.update();
+  }
+
+  let n = '';
+  if(sats.length===0){n='No satellites tracked. Send telemetry to begin efficiency analysis.';}
+  else{
+    n=`Total propellant consumed across fleet: <span>${fuelUsed.toFixed(1)} kg</span>. `;
+    n+=`Estimated total ΔV expended: <span>${dvUsed.toFixed(1)} m/s</span>. `;
+    n+=`${burns.filter(b=>b.type==='EVASION').length} evasion event(s) executed, each consuming approximately 1.8 kg propellant. `;
+    n+=`Mission efficiency: <span class="good">${cdms.filter(c=>c.miss_dist_km<0.1).length===0?'OPTIMAL — no collisions detected':'ACTIVE — monitoring conjunctions'}</span>.`;
+  }
+  document.getElementById('eff-narration').innerHTML=n;
 }
 </script>
 </body>
